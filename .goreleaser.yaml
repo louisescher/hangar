@@ -1,0 +1,58 @@
+version: 2
+project_name: hangar
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: hangar
+    main: .
+    binary: hangar
+    env:
+      - CGO_ENABLED=0 # pure-Go deps; static, cross-compilable binaries
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/louisescher/hangar/internal/cmd.version={{ .Version }}
+      - -X github.com/louisescher/hangar/internal/cmd.commit={{ .Commit }}
+      - -X github.com/louisescher/hangar/internal/cmd.date={{ .Date }}
+
+archives:
+  - id: hangar
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true # release-please owns CHANGELOG.md and the release notes
+
+release:
+  mode: keep-existing # attach assets to the release release-please created
+
+# macOS: Homebrew cask, published to the existing louisescher/homebrew-tap.
+homebrew_casks:
+  - name: hangar
+    repository:
+      owner: louisescher
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/louisescher/hangar"
+    description: "A TUI package manager for AI agent skills"
+
+# Windows: Scoop manifest, published to the existing louisescher/scoop-bucket.
+scoops:
+  - name: hangar
+    repository:
+      owner: louisescher
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/louisescher/hangar"
+    description: "A TUI package manager for AI agent skills"
+    license: MIT

@@ -16,11 +16,32 @@ lockfile, and a `doctor`.
 
 ## Install
 
+### Homebrew (macOS)
+
+```sh
+brew install louisescher/tap/hangar
+```
+
+### Scoop (Windows)
+
+```sh
+scoop bucket add louisescher https://github.com/louisescher/scoop-bucket
+scoop install hangar
+```
+
+### Prebuilt binaries (Linux, macOS, Windows)
+
+Download the archive for your platform from the
+[latest release](https://github.com/louisescher/hangar/releases/latest), extract
+it, and put the `hangar` binary on your `PATH`.
+
+### From source
+
 ```sh
 go install github.com/louisescher/hangar@latest
 ```
 
-Or build from source:
+Or clone and build:
 
 ```sh
 git clone https://github.com/louisescher/hangar && cd hangar
@@ -198,6 +219,41 @@ The codebase is layered with a strict dependency direction
 (`cmd → {tui, present, engine}`; engine packages never import the TUI). The TUI
 talks to the rest of Hangar only through `tui.EngineAPI`, so screens are tested
 against a fake engine.
+
+## Contributing
+
+Contributions are welcome. A couple of conventions keep the project releasable on
+autopilot — see [Development](#development) for build/test commands and the
+layering rules.
+
+### Commit messages — Conventional Commits
+
+Releases are cut automatically from commit history, so commits (and **PR titles**,
+since PRs are squash-merged) follow
+[Conventional Commits](https://www.conventionalcommits.org):
+
+| Prefix | Example | Effect on the next release |
+|---|---|---|
+| `fix:` | `fix: handle empty lockfile` | Patch (`0.1.0` → `0.1.1`) |
+| `feat:` | `feat: add scoop support` | Minor (`0.1.0` → `0.2.0`) |
+| `feat!:` / `BREAKING CHANGE:` footer | `feat!: drop legacy layout` | Major\* |
+| `docs:`, `refactor:`, `chore:`, `test:`, … | `chore: bump deps` | No release on its own |
+
+\* While Hangar is pre-1.0, breaking changes bump the **minor** version, not the
+major. Force an exact version any time with a `Release-As: X.Y.Z` commit footer.
+
+### How a release happens
+
+Releases are fully automated via
+[release-please](https://github.com/googleapis/release-please) and
+[GoReleaser](https://goreleaser.com):
+
+1. Conventional commits land on `main`.
+2. release-please opens and keeps updating a **release PR** that bumps the version
+   and writes `CHANGELOG.md`.
+3. A maintainer merges the release PR — that tags the version, publishes the
+   GitHub Release with binaries for Linux/macOS/Windows, and updates the Homebrew
+   tap and Scoop bucket.
 
 ## License
 
