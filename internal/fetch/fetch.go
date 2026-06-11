@@ -6,9 +6,16 @@ package fetch
 
 import (
 	"context"
+	"errors"
 
 	"github.com/louisescher/hangar/internal/spec"
 )
+
+// ErrNotFound marks a source that no longer exists upstream (a deleted/renamed
+// repo, a removed npm package). Backends wrap their not-found errors with it so
+// callers can tell "deleted remotely" apart from a transient/offline failure —
+// and keep the installed skill for manual removal rather than dropping it.
+var ErrNotFound = errors.New("source not found upstream")
 
 // Result is the materialized form of a source: an on-disk tree rooted at Root,
 // plus the resolved ref/version metadata recorded in the lockfile.

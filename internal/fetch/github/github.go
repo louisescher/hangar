@@ -131,7 +131,7 @@ func (c *Client) Fetch(ctx context.Context, s spec.SourceSpec) (fetch.Result, er
 		}
 		if !fsutil.IsDir(sub) {
 			_ = cleanup()
-			return fetch.Result{}, fmt.Errorf("subpath %q not found in %s/%s", s.Subpath, s.Owner, s.Repo)
+			return fetch.Result{}, fmt.Errorf("subpath %q no longer exists in %s/%s: %w", s.Subpath, s.Owner, s.Repo, fetch.ErrNotFound)
 		}
 		root = sub
 	}
@@ -151,8 +151,11 @@ func (c *Client) lsRefs(ctx context.Context, owner, repo string) (refs, error) {
 		return refs{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusUnauthorized {
+		return refs{}, fmt.Errorf("repository %s/%s not found (it may be private or misspelled; set GH_TOKEN for private repos): %w", owner, repo, fetch.ErrNotFound)
+	}
 	if resp.StatusCode != http.StatusOK {
-		return refs{}, fmt.Errorf("info/refs for %s/%s: HTTP %d", owner, repo, resp.StatusCode)
+		return refs{}, fmt.Errorf("could not reach %s/%s: GitHub returned HTTP %d", owner, repo, resp.StatusCode)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

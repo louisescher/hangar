@@ -4,11 +4,19 @@
 //
 //	local   := "file://"<path> | "."|".."|"~"  | ("./"|"../"|"~/"|"/")<path>
 //	npm     := "npm:" ["@"<scope> "/"] <pkg> ["/" <subpath>] ["@" <version>] ["#" <file>]
+//	ghURL   := ["https://"|"http://"|"ssh://"|"git@"] ["www."] "github.com" ("/"|":")
+//	           <owner> "/" <repo>[".git"] ["/" ("tree"|"blob") "/" <ref> ["/" <subpath>]]
 //	github  := <owner> "/" <repo> ["/" <subpath>] ["@" <ref>] ["#" <skill>]
 //
 // Disambiguation is order-sensitive and deliberate:
 //   - Local paths are checked first, because a relative path can otherwise look
 //     like an "owner/repo" pair.
+//   - A github.com web/clone URL (with or without scheme) is recognized before
+//     the bare owner/repo form so a pasted browser link "just works". The ref in
+//     a "/tree/<ref>/..." or "/blob/<ref>/..." URL is taken as the single segment
+//     after tree/blob, so a branch name containing "/" can't be disambiguated
+//     from a URL — use the owner/repo/sub@ref form for those. Only github.com is
+//     recognized (not GitHub Enterprise hosts).
 //   - For GitHub, the "#skill" suffix is peeled before the "@ref" suffix: the
 //     grammar places #skill last, so given owner/repo@v2#bar we must remove
 //     "#bar" first, then take "@v2" as the ref. The ref is taken from the LAST
@@ -82,9 +90,117 @@ func Parse(s string) (SourceSpec, error) {
 		return parseLocal(s, raw)
 	case strings.HasPrefix(s, "npm:"):
 		return parseNPM(strings.TrimPrefix(s, "npm:"), raw)
+	case isGitHubURL(s):
+		return parseGitHubURL(s, raw)
 	default:
 		return parseGitHub(s, raw)
 	}
+}
+
+// gitHubURLPrefixes are the recognized leading forms of a github.com URL.
+var gitHubURLPrefixes = []string{
+	"https://github.com/", "http://github.com/",
+	"https://www.github.com/", "http://www.github.com/",
+	"ssh://git@github.com/", "git@github.com:",
+	"github.com/", "www.github.com/",
+}
+
+// isGitHubURL reports whether s is a github.com web/clone URL (https, ssh, or
+// scheme-less) rather than the bare owner/repo spec form.
+func isGitHubURL(s string) bool {
+	l := strings.ToLower(s)
+	for _, p := range gitHubURLPrefixes {
+		if strings.HasPrefix(l, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseGitHubURL turns a github.com URL into a GitHub SourceSpec. It accepts
+// browser links (".../tree/<ref>/<subpath>", ".../blob/<ref>/<file>") as well as
+// https/ssh clone URLs. A "/tree/<ref>" segment supplies the ref (pinned) and any
+// trailing path becomes the subpath; for a "/blob/<ref>/<file>" link the skill's
+// containing directory is used as the subpath.
+func parseGitHubURL(s, raw string) (SourceSpec, error) {
+	rest := s
+
+	// Strip scheme + host, leaving "owner/repo[/tree|blob/<ref>/<path...>]".
+	if strings.HasPrefix(strings.ToLower(rest), "git@github.com:") {
+		rest = rest[len("git@github.com:"):]
+	} else {
+		for _, sc := range []string{"https://", "http://", "ssh://"} {
+			if strings.HasPrefix(strings.ToLower(rest), sc) {
+				rest = rest[len(sc):]
+				break
+			}
+		}
+		rest = strings.TrimPrefix(rest, "git@")
+		lower := strings.ToLower(rest)
+		switch {
+		case strings.HasPrefix(lower, "www.github.com/"):
+			rest = rest[len("www.github.com/"):]
+		case strings.HasPrefix(lower, "github.com/"):
+			rest = rest[len("github.com/"):]
+		}
+	}
+
+	// Drop any query string or fragment a browser URL may carry (e.g. "?tab=…",
+	// "#L10"); these don't map to a skill filter.
+	if i := strings.IndexAny(rest, "?#"); i >= 0 {
+		rest = rest[:i]
+	}
+	rest = strings.Trim(rest, "/")
+
+	parts := strings.Split(rest, "/")
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return SourceSpec{}, fmt.Errorf("invalid GitHub URL %q: expected github.com/owner/repo", raw)
+	}
+
+	sp := SourceSpec{Kind: KindGitHub, Raw: raw}
+	sp.Owner = parts[0]
+	sp.Repo = strings.TrimSuffix(parts[1], ".git")
+	if sp.Repo == "" {
+		return SourceSpec{}, fmt.Errorf("invalid GitHub URL %q: expected github.com/owner/repo", raw)
+	}
+
+	if len(parts) <= 2 {
+		return sp, nil
+	}
+
+	switch parts[2] {
+	case "tree", "blob":
+		if len(parts) < 4 || parts[3] == "" {
+			return SourceSpec{}, fmt.Errorf("invalid GitHub URL %q: %s needs a ref", raw, parts[2])
+		}
+		sp.Ref = parts[3]
+		sp.Pinned = true
+		sub := strings.Join(parts[4:], "/")
+		if parts[2] == "blob" {
+			// A blob points at a file; root the crawl at its directory so the
+			// surrounding skill (its SKILL.md) is discovered.
+			sub = path.Dir(sub)
+			if sub == "." || sub == "/" {
+				sub = ""
+			}
+		}
+		if sub != "" {
+			cleaned, err := cleanSubpath(sub, raw)
+			if err != nil {
+				return SourceSpec{}, err
+			}
+			sp.Subpath = cleaned
+		}
+	default:
+		// Trailing segments without tree/blob: treat them as a subpath.
+		cleaned, err := cleanSubpath(strings.Join(parts[2:], "/"), raw)
+		if err != nil {
+			return SourceSpec{}, err
+		}
+		sp.Subpath = cleaned
+	}
+
+	return sp, nil
 }
 
 // isLocal reports whether s should be treated as a filesystem path rather than

@@ -112,6 +112,18 @@ func (l *Lockfile) Upsert(e Entry) {
 	l.Skills = append(l.Skills, e)
 }
 
+// SetPinned sets the pinned flag on the named entry, reporting whether one
+// existed.
+func (l *Lockfile) SetPinned(name string, pinned bool) bool {
+	for i := range l.Skills {
+		if l.Skills[i].Name == name {
+			l.Skills[i].Pinned = pinned
+			return true
+		}
+	}
+	return false
+}
+
 // Remove deletes the entry with the given name, reporting whether one existed.
 func (l *Lockfile) Remove(name string) bool {
 	for i, e := range l.Skills {

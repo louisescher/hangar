@@ -32,14 +32,16 @@ func TestExtractTitle(t *testing.T) {
 }
 
 func TestReplaceBlockAddReplaceRemove(t *testing.T) {
+	refs := func(ls ...Link) []Group { return []Group{{Tag: "references", Links: ls}} }
+
 	// Add to existing prose.
-	out, changed := replaceBlock("# Handbook\n\nText.\n", buildBody([]Link{{Title: "A", Path: "./a"}}))
+	out, changed := replaceBlock("# Handbook\n\nText.\n", buildBody(refs(Link{Title: "A", Path: "./a"})))
 	if !changed || !strings.Contains(out, startMarker) || !strings.Contains(out, "[A](./a)") {
 		t.Fatalf("add failed: %q", out)
 	}
 
 	// Replace existing block contents.
-	out2, changed := replaceBlock(out, buildBody([]Link{{Title: "B", Path: "./b"}}))
+	out2, changed := replaceBlock(out, buildBody(refs(Link{Title: "B", Path: "./b"})))
 	if !changed || strings.Contains(out2, "[A](./a)") || !strings.Contains(out2, "[B](./b)") {
 		t.Fatalf("replace failed: %q", out2)
 	}
@@ -59,7 +61,7 @@ func TestReplaceBlockAddReplaceRemove(t *testing.T) {
 
 func TestRebuildCreatesAgentsFile(t *testing.T) {
 	dir := t.TempDir()
-	target, err := Rebuild(dir, []Link{{Title: "Zod", Path: "./.agents/references/zod/REFERENCE.md"}})
+	target, err := Rebuild(dir, []Group{{Tag: "references", Links: []Link{{Title: "Zod", Path: "./.agents/references/zod/REFERENCE.md"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +82,7 @@ func TestRebuildPrefersExistingClaudeMd(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("# Project\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	target, err := Rebuild(dir, []Link{{Title: "X", Path: "./x"}})
+	target, err := Rebuild(dir, []Group{{Tag: "references", Links: []Link{{Title: "X", Path: "./x"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

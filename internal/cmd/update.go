@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/louisescher/hangar/internal/engine"
+	"github.com/louisescher/hangar/internal/present"
 	"github.com/spf13/cobra"
 )
 
@@ -11,6 +12,8 @@ func newUpdateCmd() *cobra.Command {
 	var (
 		agentNames []string
 		global     bool
+		asJSON     bool
+		verbose    bool
 		sec        securityFlags
 	)
 
@@ -28,22 +31,33 @@ func newUpdateCmd() *cobra.Command {
 			}
 
 			eng := engine.New()
+			p := newProgress(c.ErrOrStderr(), verbose)
+			p.start()
 			rep, err := eng.Update(c.Context(), name, engine.InstallOptions{
-				Agents:   agentNames,
-				Global:   global,
-				Security: sec.sanitizeOpts(),
+				Agents:     agentNames,
+				Global:     global,
+				Security:   sec.sanitizeOpts(),
+				OnProgress: p.event,
 			})
+			p.finish()
 			if err != nil {
 				return err
 			}
 
 			w := c.OutOrStdout()
-			if len(rep.Skills) == 0 {
+			if asJSON {
+				return present.WriteJSON(w, present.InstallReport(rep))
+			}
+			switch {
+			case len(rep.Skills) == 0 && len(rep.Gone) == 0:
 				fmt.Fprintln(w, "everything up to date")
-			} else {
+			default:
 				for _, sr := range rep.Skills {
 					fmt.Fprintf(w, "updated %s\n", sr.Name)
 				}
+			}
+			for _, name := range rep.Gone {
+				fmt.Fprintf(w, "! %s no longer exists upstream — kept; remove with `hangar remove %s`\n", name, name)
 			}
 			if rep.Audit != nil {
 				for _, f := range rep.Audit.Findings {
@@ -57,6 +71,8 @@ func newUpdateCmd() *cobra.Command {
 
 	cmd.Flags().StringArrayVarP(&agentNames, "agent", "a", nil, "target agent (repeatable); default: auto-detect")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "update the global (~/) install")
+	cmd.Flags().BoolVar(&asJSON, "json", false, "output as JSON")
+	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print per-item progress")
 	sec.register(cmd)
 	return cmd
 }

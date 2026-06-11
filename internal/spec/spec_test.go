@@ -44,6 +44,51 @@ func TestParse(t *testing.T) {
 			want: SourceSpec{Kind: KindGitHub, Owner: "owner", Repo: "repo", Subpath: "a/b"},
 		},
 		{
+			name: "github url with tree/branch/subpath",
+			in:   "https://github.com/seibert-external/seibert-skills/tree/main/skills/development",
+			want: SourceSpec{Kind: KindGitHub, Owner: "seibert-external", Repo: "seibert-skills", Ref: "main", Pinned: true, Subpath: "skills/development"},
+		},
+		{
+			name: "github url bare",
+			in:   "https://github.com/anthropics/skills",
+			want: SourceSpec{Kind: KindGitHub, Owner: "anthropics", Repo: "skills"},
+		},
+		{
+			name: "github url trailing slash",
+			in:   "https://github.com/anthropics/skills/",
+			want: SourceSpec{Kind: KindGitHub, Owner: "anthropics", Repo: "skills"},
+		},
+		{
+			name: "github url tree branch only",
+			in:   "https://github.com/anthropics/skills/tree/v1.2.0",
+			want: SourceSpec{Kind: KindGitHub, Owner: "anthropics", Repo: "skills", Ref: "v1.2.0", Pinned: true},
+		},
+		{
+			name: "github url blob to skill file roots at its dir",
+			in:   "https://github.com/anthropics/skills/blob/main/document-skills/pdf/SKILL.md",
+			want: SourceSpec{Kind: KindGitHub, Owner: "anthropics", Repo: "skills", Ref: "main", Pinned: true, Subpath: "document-skills/pdf"},
+		},
+		{
+			name: "github url with query and fragment dropped",
+			in:   "https://github.com/anthropics/skills/tree/main/document-skills?tab=readme#top",
+			want: SourceSpec{Kind: KindGitHub, Owner: "anthropics", Repo: "skills", Ref: "main", Pinned: true, Subpath: "document-skills"},
+		},
+		{
+			name: "github clone url with .git suffix",
+			in:   "https://github.com/anthropics/skills.git",
+			want: SourceSpec{Kind: KindGitHub, Owner: "anthropics", Repo: "skills"},
+		},
+		{
+			name: "github ssh clone url",
+			in:   "git@github.com:anthropics/skills.git",
+			want: SourceSpec{Kind: KindGitHub, Owner: "anthropics", Repo: "skills"},
+		},
+		{
+			name: "github scheme-less url",
+			in:   "github.com/anthropics/skills/tree/main/web",
+			want: SourceSpec{Kind: KindGitHub, Owner: "anthropics", Repo: "skills", Ref: "main", Pinned: true, Subpath: "web"},
+		},
+		{
 			name: "npm unscoped",
 			in:   "npm:zod",
 			want: SourceSpec{Kind: KindNPM, Pkg: "zod"},
@@ -145,15 +190,18 @@ func TestParseHomeExpansion(t *testing.T) {
 
 func TestParseErrors(t *testing.T) {
 	bad := []string{
-		"",                       // empty
-		"   ",                    // blank
-		"justowner",              // single segment, not local/npm
-		"npm:",                   // npm missing package
-		"npm:@scope",             // scoped npm missing package part
-		"owner/repo/../secret",   // subpath traversal
-		"owner/repo/a/../../etc", // subpath traversal after clean
-		"npm:zod/../../etc",      // npm subpath traversal
-		"owner/repo#a/b",         // skill name with slash
+		"",                                   // empty
+		"   ",                                // blank
+		"justowner",                          // single segment, not local/npm
+		"npm:",                               // npm missing package
+		"npm:@scope",                         // scoped npm missing package part
+		"owner/repo/../secret",               // subpath traversal
+		"owner/repo/a/../../etc",             // subpath traversal after clean
+		"npm:zod/../../etc",                  // npm subpath traversal
+		"owner/repo#a/b",                     // skill name with slash
+		"https://github.com/owner",           // URL missing repo
+		"https://github.com/owner/repo/tree", // tree without a ref
+		"https://github.com/owner/repo/tree/main/../x", // URL subpath traversal
 	}
 	for _, in := range bad {
 		t.Run(in, func(t *testing.T) {

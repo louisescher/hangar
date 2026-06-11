@@ -133,7 +133,7 @@ func (c *Client) Fetch(ctx context.Context, s spec.SourceSpec) (fetch.Result, er
 		}
 		if !fsutil.IsDir(sub) {
 			_ = cleanup()
-			return fetch.Result{}, fmt.Errorf("subpath %q not found in %s@%s", s.Subpath, s.Pkg, version)
+			return fetch.Result{}, fmt.Errorf("subpath %q no longer exists in %s@%s: %w", s.Subpath, s.Pkg, version, fetch.ErrNotFound)
 		}
 		root = sub
 	}
@@ -179,7 +179,7 @@ func (c *Client) packument(ctx context.Context, pkg string) (*packument, error) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("npm package %q not found in registry %s", pkg, registry)
+		return nil, fmt.Errorf("npm package %q not found in registry %s: %w", pkg, registry, fetch.ErrNotFound)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("npm registry %s: package %q: HTTP %d", registry, pkg, resp.StatusCode)

@@ -55,6 +55,15 @@ type Reference struct {
 	File    string // source-relative path, recorded in the lockfile
 }
 
+// Event reports install progress. Phase is one of "skill", "reference", or
+// "finalize"; Index/Total count items (skills + references).
+type Event struct {
+	Phase string
+	Name  string
+	Index int
+	Total int
+}
+
 // Request bundles everything Install needs.
 type Request struct {
 	BaseDir    string
@@ -65,7 +74,14 @@ type Request struct {
 	Options    Options
 	Operation  audit.Operation // OpInstall (default) or OpUpdate
 	Audit      *audit.Log      // optional shared audit log; created if nil
+	OnProgress func(Event)     // optional progress callback (called synchronously)
 	Now        time.Time
+}
+
+func (req Request) emit(ev Event) {
+	if req.OnProgress != nil {
+		req.OnProgress(ev)
+	}
 }
 
 // SkillResult reports the outcome for one skill.
@@ -82,6 +98,7 @@ type Report struct {
 	InstalledAgents      []string // union across skills
 	FailedAgents         []string // union across skills
 	InstalledInstruction string   // instruction file updated for references, if any
+	Gone                 []string // entries skipped because their source/skill no longer exists upstream (kept on disk)
 	Audit                *audit.Log
 }
 
@@ -111,8 +128,12 @@ func Install(req Request) (Report, error) {
 	var rep Report
 	installedSet := map[string]bool{}
 	failedSet := map[string]bool{}
+	total := len(req.Skills) + len(req.References)
+	idx := 0
 
 	for _, sk := range req.Skills {
+		idx++
+		req.emit(Event{Phase: "skill", Name: sk.Name, Index: idx, Total: total})
 		canonicalDir := filepath.Join(canonicalRoot, sk.Name)
 
 		// Capture the prior manifest so updates can be diffed.
@@ -176,6 +197,8 @@ func Install(req Request) (Report, error) {
 	}
 
 	for _, ref := range req.References {
+		idx++
+		req.emit(Event{Phase: "reference", Name: ref.Name, Index: idx, Total: total})
 		sr, err := installReference(req, lf, ref, op)
 		if err != nil {
 			return rep, err
@@ -183,6 +206,7 @@ func Install(req Request) (Report, error) {
 		rep.Skills = append(rep.Skills, sr)
 	}
 
+	req.emit(Event{Phase: "finalize", Index: total, Total: total})
 	if err := lf.Save(); err != nil {
 		return rep, fmt.Errorf("save lockfile: %w", err)
 	}
@@ -313,20 +337,90 @@ func vendorDeps(crawlRoot, skillDir, canonicalDir, canonicalRoot string) error {
 // rebuildReferences regenerates the references block from the lockfile's ref
 // entries.
 func rebuildReferences(baseDir string, lf *lockfile.Lockfile) (string, error) {
+	return refsblock.Rebuild(baseDir, blockGroups(baseDir, lf))
+}
+
+// blockGroups assembles the managed-block sections for a lockfile. Reference
+// docs always appear; installed skills are added only when an instruction file
+// already exists, so a pure-skill install never creates an AGENTS.md (skills are
+// auto-discovered via .agents/skills and per-agent links — the block is a
+// convenience for files the user already keeps).
+func blockGroups(baseDir string, lf *lockfile.Lockfile) []refsblock.Group {
+	refs := refsblock.Group{Tag: "references", Links: referenceLinks(baseDir, lf)}
+	if _, ok := refsblock.ExistingTarget(baseDir); ok {
+		return []refsblock.Group{
+			{Tag: "skills", Links: skillLinks(baseDir, lf)},
+			refs,
+		}
+	}
+	return []refsblock.Group{refs}
+}
+
+// skillLinks builds the managed-block links for a lockfile's skill entries,
+// titling each from its installed SKILL.md (falling back to the entry name).
+func skillLinks(baseDir string, lf *lockfile.Lockfile) []refsblock.Link {
+	var links []refsblock.Link
+	for _, e := range lf.Skills {
+		if e.Kind != lockfile.KindSkill {
+			continue
+		}
+		p := filepath.Join(baseDir, ".agents", "skills", e.Name, skillManifest)
+		title := e.Name
+		if data, err := os.ReadFile(p); err == nil {
+			title = refsblock.ExtractTitle(data, e.Name)
+		}
+		links = append(links, refsblock.Link{
+			Title: title,
+			Path:  "./" + filepath.ToSlash(filepath.Join(".agents", "skills", e.Name, skillManifest)),
+		})
+	}
+	return links
+}
+
+// referenceLinks builds the managed-block links for a lockfile's reference
+// entries, titling each from its installed REFERENCE.md (falling back to name).
+func referenceLinks(baseDir string, lf *lockfile.Lockfile) []refsblock.Link {
 	refs := lf.Refs()
 	links := make([]refsblock.Link, 0, len(refs))
 	for _, e := range refs {
-		refPath := filepath.Join(baseDir, ".agents", "references", e.Name, "REFERENCE.md")
+		refPath := filepath.Join(baseDir, ".agents", "references", e.Name, referenceFile)
 		title := e.Name
 		if data, err := os.ReadFile(refPath); err == nil {
 			title = refsblock.ExtractTitle(data, e.Name)
 		}
 		links = append(links, refsblock.Link{
 			Title: title,
-			Path:  "./" + filepath.ToSlash(filepath.Join(".agents", "references", e.Name, "REFERENCE.md")),
+			Path:  "./" + filepath.ToSlash(filepath.Join(".agents", "references", e.Name, referenceFile)),
 		})
 	}
-	return refsblock.Rebuild(baseDir, links)
+	return links
+}
+
+// RebuildReferences regenerates the managed references block from the lockfile.
+// It returns the instruction file updated (relative to baseDir), or "" if
+// nothing changed. Used by `doctor --fix`.
+func RebuildReferences(baseDir string) (string, error) {
+	lf, err := lockfile.Load(baseDir)
+	if err != nil {
+		return "", err
+	}
+	return rebuildReferences(baseDir, lf)
+}
+
+// ReferencesInSync reports whether the managed references block matches the
+// lockfile's reference entries.
+func ReferencesInSync(baseDir string) (bool, error) {
+	lf, err := lockfile.Load(baseDir)
+	if err != nil {
+		return false, err
+	}
+	want := refsblock.ExpectedBlock(blockGroups(baseDir, lf))
+	got, exists := refsblock.CurrentBlock(baseDir)
+	if want == "" {
+		// No references expected: in sync iff there is no block.
+		return !exists, nil
+	}
+	return exists && got == want, nil
 }
 
 func keys(m map[string]bool) []string {

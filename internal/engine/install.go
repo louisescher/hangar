@@ -16,17 +16,21 @@ import (
 
 // InstallOptions configures a headless install via the engine.
 type InstallOptions struct {
-	Agents   []string // explicit agent names; empty => auto-detect
-	Global   bool
-	All      bool   // install every discovered skill
-	Yes      bool   // reserved for confirmation skipping
-	BaseDir  string // install root; default cwd (or $HOME when Global)
-	Security sanitize.Opts
+	Agents     []string // explicit agent names; empty => auto-detect
+	Global     bool
+	All        bool   // install every discovered skill
+	Yes        bool   // accept without the interactive picker (take all)
+	BaseDir    string // install root; default cwd (or $HOME when Global)
+	Security   sanitize.Opts
+	OnProgress func(install.Event) // optional progress callback
 }
 
 // Install discovers a source, selects skills (all, the single match, or the
 // #skill filter), resolves target agents, and installs.
 func (e *Engine) Install(ctx context.Context, s spec.SourceSpec, opt InstallOptions) (install.Report, error) {
+	if opt.OnProgress != nil {
+		opt.OnProgress(install.Event{Phase: "fetching", Name: sourceLabel(s)})
+	}
 	d, err := e.Discover(ctx, s)
 	if err != nil {
 		return install.Report{}, err
@@ -43,18 +47,26 @@ func (e *Engine) Install(ctx context.Context, s spec.SourceSpec, opt InstallOpti
 		return install.Report{}, err
 	}
 
+	return e.InstallSelected(d, s, selected, d.References, agts, opt)
+}
+
+// InstallSelected installs an already-discovered selection of skills and
+// references. The Discovered must still be open (its crawl root must remain on
+// disk), which is how the interactive picker installs the user's chosen subset
+// without re-fetching. Agents are resolved by the caller.
+func (e *Engine) InstallSelected(d *Discovered, s spec.SourceSpec, skills []Skill, refs []discover.RefDoc, agts []agents.Agent, opt InstallOptions) (install.Report, error) {
 	baseDir, err := resolveBaseDir(opt)
 	if err != nil {
 		return install.Report{}, err
 	}
-
 	return install.Install(install.Request{
 		BaseDir:    baseDir,
-		Skills:     selected,
-		References: buildReferences(s, d.References),
+		Skills:     skills,
+		References: buildReferences(s, refs),
 		Agents:     agts,
 		Options:    install.Options{Global: opt.Global, Security: opt.Security},
 		Meta:       buildMeta(s, d),
+		OnProgress: opt.OnProgress,
 	})
 }
 
@@ -88,10 +100,11 @@ func selectSkills(all []Skill, refs []discover.RefDoc, opt InstallOptions) ([]Sk
 			return nil, nil
 		}
 		return nil, fmt.Errorf("no skills found")
-	case opt.All, len(all) == 1:
+	case opt.All, opt.Yes, len(all) == 1:
+		// --all and --yes both mean "take everything without a picker".
 		return all, nil
 	default:
-		return nil, fmt.Errorf("source has %d skills; pass --all to install all, or select one with #name (interactive picker coming soon)", len(all))
+		return nil, fmt.Errorf("source has %d skills; pass --all to install all, -y to accept, or select one with #name", len(all))
 	}
 }
 

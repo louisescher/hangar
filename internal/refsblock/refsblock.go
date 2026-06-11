@@ -30,32 +30,49 @@ var candidates = []string{
 	filepath.Join(".github", "copilot-instructions.md"),
 }
 
-// Link is one reference entry rendered into the block.
+// Link is one entry rendered into the block.
 type Link struct {
-	Title string // display text (the reference's H1, or its name)
+	Title string // display text (the doc's H1, or its name)
 	Path  string // path used in the markdown link, e.g. ./.agents/references/x/REFERENCE.md
+}
+
+// Group is a titled section of links rendered as <tag>…</tag> inside the block
+// (e.g. "skills", "references"). Empty groups are omitted.
+type Group struct {
+	Tag   string
+	Links []Link
 }
 
 // TargetPath returns the instruction file to manage under baseDir: the first
 // existing candidate, or AGENTS.md when none exist.
 func TargetPath(baseDir string) string {
-	for _, c := range candidates {
-		if fsutil.Exists(filepath.Join(baseDir, c)) {
-			return filepath.Join(baseDir, c)
-		}
+	if p, ok := ExistingTarget(baseDir); ok {
+		return p
 	}
 	return filepath.Join(baseDir, candidates[0])
 }
 
-// Rebuild rewrites the managed references block in the target instruction file
-// to contain exactly links. When links is empty the block is removed. It
-// returns the target file's path relative to baseDir, or "" when nothing was
-// written (no block existed and there were no links to add).
-func Rebuild(baseDir string, links []Link) (string, error) {
+// ExistingTarget returns the first instruction file that already exists under
+// baseDir, and whether one was found. Callers use this to honor "only update an
+// AGENTS.md/CLAUDE.md if present".
+func ExistingTarget(baseDir string) (string, bool) {
+	for _, c := range candidates {
+		if fsutil.Exists(filepath.Join(baseDir, c)) {
+			return filepath.Join(baseDir, c), true
+		}
+	}
+	return "", false
+}
+
+// Rebuild rewrites the managed block in the target instruction file to contain
+// exactly groups. When every group is empty the block is removed. It returns the
+// target file's path relative to baseDir, or "" when nothing was written (no
+// block existed and there were no links to add).
+func Rebuild(baseDir string, groups []Group) (string, error) {
 	target := TargetPath(baseDir)
 	existing, _ := os.ReadFile(target) // missing file => empty content
 
-	body := buildBody(links)
+	body := buildBody(groups)
 	updated, changed := replaceBlock(string(existing), body)
 	if !changed {
 		return "", nil
@@ -70,22 +87,27 @@ func Rebuild(baseDir string, links []Link) (string, error) {
 	return rel, nil
 }
 
-// buildBody renders the inner block content (without the markers). Returns ""
-// when there are no links.
-func buildBody(links []Link) string {
-	if len(links) == 0 {
-		return ""
-	}
-	sorted := append([]Link(nil), links...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Title < sorted[j].Title })
+// buildBody renders the inner block content (without the markers): one
+// <tag>…</tag> section per non-empty group, links sorted by title. Returns ""
+// when there are no links at all.
+func buildBody(groups []Group) string {
+	var sections []string
+	for _, g := range groups {
+		if len(g.Links) == 0 {
+			continue
+		}
+		sorted := append([]Link(nil), g.Links...)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i].Title < sorted[j].Title })
 
-	var b strings.Builder
-	b.WriteString("<references>\n")
-	for _, l := range sorted {
-		fmt.Fprintf(&b, "- [%s](%s)\n", l.Title, l.Path)
+		var b strings.Builder
+		fmt.Fprintf(&b, "<%s>\n", g.Tag)
+		for _, l := range sorted {
+			fmt.Fprintf(&b, "- [%s](%s)\n", l.Title, l.Path)
+		}
+		fmt.Fprintf(&b, "</%s>", g.Tag)
+		sections = append(sections, b.String())
 	}
-	b.WriteString("</references>")
-	return b.String()
+	return strings.Join(sections, "\n")
 }
 
 // replaceBlock returns content with its managed block set to body (wrapped in
@@ -136,6 +158,27 @@ func replaceBlock(content, body string) (string, bool) {
 	block := startMarker + "\n" + body + "\n" + endMarker
 	out := prefix + block + suffix
 	return out, out != content
+}
+
+// ExpectedBlock renders the block body (without markers) for groups — the
+// canonical form the managed block should hold.
+func ExpectedBlock(groups []Group) string { return buildBody(groups) }
+
+// CurrentBlock returns the body inside the managed block of baseDir's
+// instruction file (without markers), and whether such a block exists.
+func CurrentBlock(baseDir string) (string, bool) {
+	content, err := os.ReadFile(TargetPath(baseDir))
+	if err != nil {
+		return "", false
+	}
+	s := string(content)
+	start := strings.Index(s, startMarker)
+	end := strings.Index(s, endMarker)
+	if start == -1 || end == -1 || end < start {
+		return "", false
+	}
+	body := s[start+len(startMarker) : end]
+	return strings.Trim(body, "\n"), true
 }
 
 // ExtractTitle returns the first markdown H1 (`# Title`) in data, cleaned of

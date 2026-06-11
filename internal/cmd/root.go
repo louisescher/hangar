@@ -4,11 +4,17 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 
 	"github.com/spf13/cobra"
 )
+
+// errSilent signals a non-zero exit with no extra output (the command already
+// wrote everything it needed to, e.g. JSON). Execute suppresses its message.
+var errSilent = errors.New("")
 
 // Build-time metadata, overridable via -ldflags.
 var (
@@ -26,10 +32,13 @@ func newRootCmd() *cobra.Command {
 			"packages and installs them into the AI coding agents on your machine.\n\n" +
 			"Run `hangar` with no arguments to browse interactively.",
 		SilenceUsage:  true,
-		SilenceErrors: false,
-		// With no subcommand we'll eventually launch the browse TUI. For now,
-		// show help so the skeleton is usable.
+		SilenceErrors: true, // Execute prints errors itself, skipping errSilent
+		// With no subcommand, launch the browse TUI on a terminal; otherwise
+		// show help (e.g. piped or in CI).
 		RunE: func(c *cobra.Command, args []string) error {
+			if interactive(false) {
+				return runTUI(c, nil, nil, nil, false, nil)
+			}
 			return c.Help()
 		},
 	}
@@ -48,6 +57,12 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newInstallCmd())
 	root.AddCommand(newUpdateCmd())
 	root.AddCommand(newRemoveCmd())
+	root.AddCommand(newDoctorCmd())
+	root.AddCommand(newInfoCmd())
+	root.AddCommand(newPinCmd())
+	root.AddCommand(newUnpinCmd())
+	root.AddCommand(newProfileCmd())
+	root.AddCommand(newNukeCmd())
 
 	return root
 }
@@ -58,5 +73,9 @@ func newRootCmd() *cobra.Command {
 func Execute() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	return newRootCmd().ExecuteContext(ctx)
+	err := newRootCmd().ExecuteContext(ctx)
+	if err != nil && !errors.Is(err, errSilent) {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+	}
+	return err
 }

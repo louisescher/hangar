@@ -1,0 +1,25 @@
+[
+  { "category": "Documents", "name": "pdf", "spec": "anthropics/skills/skills/pdf", "description": "Read, fill, merge, split, and OCR PDF files.", "tags": ["pdf", "documents"] },
+  { "category": "Documents", "name": "docx", "spec": "anthropics/skills/skills/docx", "description": "Create, read, and edit Word documents (.docx).", "tags": ["word", "documents"] },
+  { "category": "Documents", "name": "xlsx", "spec": "anthropics/skills/skills/xlsx", "description": "Create and edit Excel spreadsheets (.xlsx).", "tags": ["excel", "documents"] },
+  { "category": "Documents", "name": "pptx", "spec": "anthropics/skills/skills/pptx", "description": "Create and edit PowerPoint presentations (.pptx).", "tags": ["powerpoint", "documents"] },
+
+  { "category": "Design & Art", "name": "canvas-design", "spec": "anthropics/skills/skills/canvas-design", "description": "Create posters, art, and static designs as .png/.pdf.", "tags": ["design", "art"] },
+  { "category": "Design & Art", "name": "algorithmic-art", "spec": "anthropics/skills/skills/algorithmic-art", "description": "Generative art with p5.js — flow fields, particles, seeded randomness.", "tags": ["art", "generative", "p5"] },
+  { "category": "Design & Art", "name": "brand-guidelines", "spec": "anthropics/skills/skills/brand-guidelines", "description": "Apply Anthropic's brand colors and typography to artifacts.", "tags": ["design", "brand"] },
+  { "category": "Design & Art", "name": "theme-factory", "spec": "anthropics/skills/skills/theme-factory", "description": "Generate cohesive visual themes.", "tags": ["design", "theme"] },
+
+  { "category": "Web & Frontend", "name": "frontend-design", "spec": "anthropics/skills/skills/frontend-design", "description": "Distinctive, intentional UI design guidance.", "tags": ["frontend", "ui"] },
+  { "category": "Web & Frontend", "name": "web-artifacts-builder", "spec": "anthropics/skills/skills/web-artifacts-builder", "description": "Build rich, self-contained web artifacts.", "tags": ["web", "artifacts"] },
+  { "category": "Web & Frontend", "name": "webapp-testing", "spec": "anthropics/skills/skills/webapp-testing", "description": "Test web applications end to end.", "tags": ["web", "testing"] },
+
+  { "category": "Development & Agents", "name": "claude-api", "spec": "anthropics/skills/skills/claude-api", "description": "Reference for the Claude API / Anthropic SDK.", "tags": ["api", "claude", "sdk"] },
+  { "category": "Development & Agents", "name": "mcp-builder", "spec": "anthropics/skills/skills/mcp-builder", "description": "Build Model Context Protocol (MCP) servers.", "tags": ["mcp", "agents"] },
+  { "category": "Development & Agents", "name": "skill-creator", "spec": "anthropics/skills/skills/skill-creator", "description": "Author new Agent Skills (SKILL.md).", "tags": ["skills", "authoring"] },
+
+  { "category": "Writing & Comms", "name": "doc-coauthoring", "spec": "anthropics/skills/skills/doc-coauthoring", "description": "A structured workflow for co-authoring documentation.", "tags": ["writing", "docs"] },
+  { "category": "Writing & Comms", "name": "internal-comms", "spec": "anthropics/skills/skills/internal-comms", "description": "Draft clear internal communications.", "tags": ["writing", "comms"] },
+  { "category": "Writing & Comms", "name": "slack-gif-creator", "spec": "anthropics/skills/skills/slack-gif-creator", "description": "Create animated GIFs for Slack.", "tags": ["slack", "gif", "fun"] },
+
+  { "category": "Collections", "name": "anthropic-skills", "spec": "anthropics/skills", "description": "Browse Anthropic's full official skills collection.", "tags": ["official", "collection"] }
+]
