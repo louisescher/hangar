@@ -35,7 +35,8 @@ Download the archive for your platform from the
 [latest release](https://github.com/louisescher/hangar/releases/latest), extract
 it, and put the `hangar` binary on your `PATH`.
 
-> [!NOTE] The prebuilt binaries are not code-signed. On macOS, Gatekeeper will
+> [!NOTE]
+> The prebuilt binaries are not code-signed. On macOS, Gatekeeper will
 > block the first run — right-click the binary in Finder and choose **Open**, or
 > run `xattr -d com.apple.quarantine hangar` in the terminal. On Windows, you may
 > need to click **More info → Run anyway** in the SmartScreen prompt.
