@@ -38,8 +38,10 @@ it, and put the `hangar` binary on your `PATH`.
 > [!NOTE]
 > The prebuilt binaries are not code-signed. On macOS, Gatekeeper will
 > block the first run — right-click the binary in Finder and choose **Open**, or
-> run `xattr -d com.apple.quarantine hangar` in the terminal. On Windows, you may
-> need to click **More info → Run anyway** in the SmartScreen prompt.
+> run `xattr -d com.apple.quarantine ./hangar` from the extraction directory. When using
+> HomeBrew, you need to use `xattr -d com.apple.quarantine /opt/homebrew/bin/hangar` on
+> Apple Silicon and `xattr -d com.apple.quarantine /usr/local/bin/hangar` on Intel Macs.
+> On Windows, you may need to click **More info → Run anyway** in the SmartScreen prompt.
 
 ### From source
 
