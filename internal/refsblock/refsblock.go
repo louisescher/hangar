@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -137,10 +138,12 @@ func replaceBlock(content, body string) (string, bool) {
 	return out, out != content
 }
 
-// ExtractTitle returns the first markdown H1 (`# Title`) in data, falling back
-// to fallback when none is present.
+// ExtractTitle returns the first markdown H1 (`# Title`) in data, cleaned of
+// inline markdown (badges, links) so it renders safely inside a `[title](path)`
+// link. Falls back to fallback when no H1 is present or it cleans to empty.
 func ExtractTitle(data []byte, fallback string) string {
 	sc := bufio.NewScanner(bytes.NewReader(data))
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	inFrontmatter := false
 	first := true
 	for sc.Scan() {
@@ -159,8 +162,29 @@ func ExtractTitle(data []byte, fallback string) string {
 			continue
 		}
 		if strings.HasPrefix(line, "# ") {
-			return strings.TrimSpace(line[2:])
+			if title := cleanInlineMarkdown(line[2:]); title != "" {
+				return title
+			}
+			return fallback
 		}
 	}
 	return fallback
+}
+
+var (
+	mdImageRe = regexp.MustCompile(`!\[[^\]]*\]\([^)]*\)`)
+	mdLinkRe  = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	wsRe      = regexp.MustCompile(`\s+`)
+)
+
+// cleanInlineMarkdown reduces a heading to plain text: it drops inline images
+// (badges), unwraps links to their text, collapses whitespace, and trims. This
+// keeps a title usable as the visible text of an outer markdown link.
+func cleanInlineMarkdown(s string) string {
+	s = mdImageRe.ReplaceAllString(s, "")  // ![alt](url)        -> ""
+	s = mdLinkRe.ReplaceAllString(s, "$1") // [text](url)        -> text
+	s = strings.ReplaceAll(s, "]", "")
+	s = strings.ReplaceAll(s, "[", "")
+	s = wsRe.ReplaceAllString(s, " ")
+	return strings.TrimSpace(s)
 }

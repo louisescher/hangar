@@ -46,7 +46,14 @@ func newListCmd() *cobra.Command {
 					fmt.Fprintf(w, "  %s\n", sk.Name)
 				}
 			}
-			fmt.Fprintf(w, "\n%d skill(s)\n", len(d.Skills))
+			for _, r := range d.References {
+				fmt.Fprintf(w, "  %-28s %s\n", "[ref]", r.RelPath)
+			}
+			fmt.Fprintf(w, "\n%d skill(s)", len(d.Skills))
+			if len(d.References) > 0 {
+				fmt.Fprintf(w, ", %d reference(s)", len(d.References))
+			}
+			fmt.Fprintln(w)
 			return nil
 		},
 	}

@@ -17,14 +17,20 @@ import (
 	"github.com/louisescher/hangar/internal/link"
 	"github.com/louisescher/hangar/internal/lockfile"
 	"github.com/louisescher/hangar/internal/refsblock"
+	"github.com/louisescher/hangar/internal/security/audit"
+	"github.com/louisescher/hangar/internal/security/sanitize"
 )
+
+// skillManifest is the file used to represent a skill's content in the audit log.
+const skillManifest = "SKILL.md"
 
 // vendorDepth bounds how deep ResolveSkillFiles follows markdown links.
 const vendorDepth = 3
 
 // Options controls install behavior.
 type Options struct {
-	Global bool
+	Global   bool
+	Security sanitize.Opts
 }
 
 // SourceMeta describes the source the skills came from, for lockfile and
@@ -32,21 +38,34 @@ type Options struct {
 type SourceMeta struct {
 	Source    string // lockfile "source": owner/repo, file://path, npm:pkg
 	Subpath   string // spec subpath (crawl root within the source)
-	Ref       string
-	SHA       string
+	Ref       string // branch/tag (GitHub)
+	SHA       string // resolved commit SHA (GitHub)
+	Version   string // package version (npm)
 	IsTag     bool
 	Pinned    bool
 	CrawlRoot string // on-disk crawl root, used to bound vendoring
 }
 
+// Reference is a documentation file installed under
+// .agents/references/<Name>/REFERENCE.md and surfaced via the instructions
+// block (it is never symlinked into agents).
+type Reference struct {
+	Name    string // unique lockfile key and directory name
+	AbsPath string // source markdown file on disk
+	File    string // source-relative path, recorded in the lockfile
+}
+
 // Request bundles everything Install needs.
 type Request struct {
-	BaseDir string
-	Skills  []discover.Skill
-	Meta    SourceMeta
-	Agents  []agents.Agent
-	Options Options
-	Now     time.Time
+	BaseDir    string
+	Skills     []discover.Skill
+	References []Reference // npm doc references (README, docs/**)
+	Meta       SourceMeta
+	Agents     []agents.Agent
+	Options    Options
+	Operation  audit.Operation // OpInstall (default) or OpUpdate
+	Audit      *audit.Log      // optional shared audit log; created if nil
+	Now        time.Time
 }
 
 // SkillResult reports the outcome for one skill.
@@ -63,12 +82,20 @@ type Report struct {
 	InstalledAgents      []string // union across skills
 	FailedAgents         []string // union across skills
 	InstalledInstruction string   // instruction file updated for references, if any
+	Audit                *audit.Log
 }
 
 // Install performs the pipeline for the given request.
 func Install(req Request) (Report, error) {
 	if req.Now.IsZero() {
 		req.Now = time.Now().UTC()
+	}
+	op := req.Operation
+	if op == "" {
+		op = audit.OpInstall
+	}
+	if req.Audit == nil {
+		req.Audit = audit.New(op)
 	}
 	lf, err := lockfile.Load(req.BaseDir)
 	if err != nil {
@@ -87,12 +114,25 @@ func Install(req Request) (Report, error) {
 
 	for _, sk := range req.Skills {
 		canonicalDir := filepath.Join(canonicalRoot, sk.Name)
+
+		// Capture the prior manifest so updates can be diffed.
+		var oldContent string
+		if op == audit.OpUpdate {
+			if b, err := os.ReadFile(filepath.Join(canonicalDir, skillManifest)); err == nil {
+				oldContent = string(b)
+			}
+		}
+
 		if err := link.Copy(sk.AbsPath, canonicalDir); err != nil {
 			return rep, fmt.Errorf("copy skill %q: %w", sk.Name, err)
 		}
 		if err := vendorDeps(req.Meta.CrawlRoot, sk.AbsPath, canonicalDir, canonicalRoot); err != nil {
 			return rep, fmt.Errorf("vendor files for %q: %w", sk.Name, err)
 		}
+		if err := sanitize.SkillDir(canonicalDir, req.Options.Security); err != nil {
+			return rep, fmt.Errorf("sanitize skill %q: %w", sk.Name, err)
+		}
+		recordAudit(req.Audit, sk, req.Meta, op, canonicalDir, oldContent)
 
 		sr := SkillResult{Name: sk.Name, Kind: lockfile.KindSkill, FailedAgents: map[string]string{}}
 		for _, ag := range req.Agents {
@@ -127,10 +167,19 @@ func Install(req Request) (Report, error) {
 			Subpath:     path.Join(req.Meta.Subpath, sk.RelPath),
 			Ref:         req.Meta.Ref,
 			SHA:         req.Meta.SHA,
+			Version:     req.Meta.Version,
 			InstalledAt: req.Now,
 			Pinned:      req.Meta.Pinned,
 			Kind:        lockfile.KindSkill,
 		})
+		rep.Skills = append(rep.Skills, sr)
+	}
+
+	for _, ref := range req.References {
+		sr, err := installReference(req, lf, ref, op)
+		if err != nil {
+			return rep, err
+		}
 		rep.Skills = append(rep.Skills, sr)
 	}
 
@@ -146,7 +195,89 @@ func Install(req Request) (Report, error) {
 
 	rep.InstalledAgents = keys(installedSet)
 	rep.FailedAgents = keys(failedSet)
+	rep.Audit = req.Audit
 	return rep, nil
+}
+
+// recordAudit appends an audit change for one installed skill: full content for
+// a first install, a unified diff for an update.
+func recordAudit(log *audit.Log, sk discover.Skill, meta SourceMeta, op audit.Operation, canonicalDir, oldContent string) {
+	newContent := ""
+	if b, err := os.ReadFile(filepath.Join(canonicalDir, skillManifest)); err == nil {
+		newContent = string(b)
+	}
+	change := audit.Change{
+		Name:      sk.Name,
+		Kind:      audit.KindSkill,
+		Source:    meta.Source,
+		Ref:       meta.Ref,
+		SHA:       meta.SHA,
+		Operation: op,
+	}
+	if op == audit.OpUpdate && oldContent != "" {
+		d := audit.UnifiedDiff(sk.Name, oldContent, newContent)
+		change.Diff = &d
+	} else {
+		change.Content = &newContent
+	}
+	log.AddChange(change)
+}
+
+// referenceFile is the canonical filename for an installed reference doc.
+const referenceFile = "REFERENCE.md"
+
+// installReference sanitizes one reference doc, writes it to the references
+// store, records an audit change, and upserts its lockfile entry. References
+// get full sanitization (comments stripped too) since they are third-party
+// docs rather than authored skills.
+func installReference(req Request, lf *lockfile.Lockfile, ref Reference, op audit.Operation) (SkillResult, error) {
+	raw, err := os.ReadFile(ref.AbsPath)
+	if err != nil {
+		return SkillResult{}, fmt.Errorf("read reference %q: %w", ref.Name, err)
+	}
+	cleaned := sanitize.Reference(string(raw), req.Options.Security)
+	dst := filepath.Join(req.BaseDir, ".agents", "references", ref.Name, referenceFile)
+
+	var oldContent string
+	if op == audit.OpUpdate {
+		if b, err := os.ReadFile(dst); err == nil {
+			oldContent = string(b)
+		}
+	}
+	if err := fsutil.AtomicWriteFile(dst, []byte(cleaned), 0o644); err != nil {
+		return SkillResult{}, fmt.Errorf("write reference %q: %w", ref.Name, err)
+	}
+
+	change := audit.Change{
+		Name:      ref.Name,
+		Kind:      audit.KindReference,
+		Source:    req.Meta.Source,
+		Ref:       req.Meta.Ref,
+		SHA:       req.Meta.SHA,
+		Operation: op,
+	}
+	if op == audit.OpUpdate && oldContent != "" {
+		d := audit.UnifiedDiff(ref.Name, oldContent, cleaned)
+		change.Diff = &d
+	} else {
+		change.Content = &cleaned
+	}
+	req.Audit.AddChange(change)
+
+	lf.Upsert(lockfile.Entry{
+		Name:        ref.Name,
+		Source:      req.Meta.Source,
+		Subpath:     req.Meta.Subpath,
+		File:        ref.File,
+		Ref:         req.Meta.Ref,
+		SHA:         req.Meta.SHA,
+		Version:     req.Meta.Version,
+		InstalledAt: req.Now,
+		Pinned:      req.Meta.Pinned,
+		Kind:        lockfile.KindRef,
+	})
+
+	return SkillResult{Name: ref.Name, Kind: lockfile.KindRef}, nil
 }
 
 // vendorDeps copies in-repo files referenced by the skill (but living outside

@@ -14,6 +14,21 @@ func TestExtractTitle(t *testing.T) {
 	if got := ExtractTitle([]byte("no heading here"), "fallback"); got != "fallback" {
 		t.Errorf("got %q, want fallback", got)
 	}
+
+	// A README H1 full of badges must clean down to plain text so it can sit
+	// inside an outer [title](path) link without breaking the markdown.
+	badge := "# is-odd [![NPM version](https://img.shields.io/npm/v/is-odd.svg)](https://npmjs.com/package/is-odd) [![Build](https://x/b.svg)](https://x/b)\n"
+	if got := ExtractTitle([]byte(badge), "is-odd"); got != "is-odd" {
+		t.Errorf("badge title = %q, want is-odd", got)
+	}
+	// An H1 that is nothing but a badge cleans to empty → fall back to the name.
+	if got := ExtractTitle([]byte("# [![only a badge](u)](u)\n"), "pkgname"); got != "pkgname" {
+		t.Errorf("empty cleaned title should fall back, got %q", got)
+	}
+	// A plain link unwraps to its text.
+	if got := ExtractTitle([]byte("# [Zod](https://zod.dev)\n"), "fb"); got != "Zod" {
+		t.Errorf("link title = %q, want Zod", got)
+	}
 }
 
 func TestReplaceBlockAddReplaceRemove(t *testing.T) {

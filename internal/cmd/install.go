@@ -16,6 +16,7 @@ func newInstallCmd() *cobra.Command {
 		global     bool
 		all        bool
 		yes        bool
+		sec        securityFlags
 	)
 
 	cmd := &cobra.Command{
@@ -36,15 +37,17 @@ func newInstallCmd() *cobra.Command {
 
 			eng := engine.New()
 			rep, err := eng.Install(c.Context(), s, engine.InstallOptions{
-				Agents: agentNames,
-				Global: global,
-				All:    all,
-				Yes:    yes,
+				Agents:   agentNames,
+				Global:   global,
+				All:      all,
+				Yes:      yes,
+				Security: sec.sanitizeOpts(),
 			})
 			if err != nil {
 				return err
 			}
 			printReport(c, rep)
+			sec.emitAudit(c, rep.Audit)
 			return nil
 		},
 	}
@@ -53,12 +56,17 @@ func newInstallCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "install into ~/ (global) instead of the current project")
 	cmd.Flags().BoolVarP(&all, "all", "A", false, "install every skill the source contains")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts")
+	sec.register(cmd)
 	return cmd
 }
 
 func printReport(c *cobra.Command, rep install.Report) {
 	w := c.OutOrStdout()
 	for _, sr := range rep.Skills {
+		if sr.Kind == "ref" {
+			fmt.Fprintf(w, "added reference %s\n", sr.Name)
+			continue
+		}
 		fmt.Fprintf(w, "installed %s\n", sr.Name)
 		for agent, reason := range sr.FailedAgents {
 			fmt.Fprintf(w, "  ! %s: %s\n", agent, reason)

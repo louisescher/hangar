@@ -123,7 +123,7 @@ func TestFetchExtractsWithSubpath(t *testing.T) {
 		{"3333333333333333333333333333333333333333", "refs/tags/v1.2.0"},
 	})
 	tarball := makeTarGz(t, "skills-v1.2.0", map[string]string{
-		"README.md":                  "# repo",
+		"README.md":                    "# repo",
 		"document-skills/pdf/SKILL.md": "---\nname: pdf\n---\n",
 	})
 	srv := newTestServer(t, adv, tarball)
