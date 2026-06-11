@@ -1,0 +1,19 @@
+# Binaries
+/hangar
+/dist/
+*.exe
+*.out
+
+# Go
+/vendor/
+*.test
+*.prof
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Hangar test sandboxes
+/tmp/
+/.agents/
