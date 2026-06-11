@@ -35,6 +35,11 @@ Download the archive for your platform from the
 [latest release](https://github.com/louisescher/hangar/releases/latest), extract
 it, and put the `hangar` binary on your `PATH`.
 
+> [!NOTE] The prebuilt binaries are not code-signed. On macOS, Gatekeeper will
+> block the first run — right-click the binary in Finder and choose **Open**, or
+> run `xattr -d com.apple.quarantine hangar` in the terminal. On Windows, you may
+> need to click **More info → Run anyway** in the SmartScreen prompt.
+
 ### From source
 
 ```sh
@@ -75,15 +80,15 @@ hangar doctor
 
 ## Source specifiers
 
-| Form | Example |
-|---|---|
-| GitHub repo | `owner/repo` |
-| …with a subpath | `owner/repo/path/to/skills` |
-| …pinned to a ref | `owner/repo@v1.2.0` or `owner/repo@release/1.x` |
-| …a single skill | `owner/repo#skill-name` |
-| npm package | `npm:lodash`, `npm:@scope/pkg` |
+| Form                       | Example                                               |
+| -------------------------- | ----------------------------------------------------- |
+| GitHub repo                | `owner/repo`                                          |
+| …with a subpath            | `owner/repo/path/to/skills`                           |
+| …pinned to a ref           | `owner/repo@v1.2.0` or `owner/repo@release/1.x`       |
+| …a single skill            | `owner/repo#skill-name`                               |
+| npm package                | `npm:lodash`, `npm:@scope/pkg`                        |
 | …a version / subpath / doc | `npm:pkg@1.2.0`, `npm:pkg/sub`, `npm:pkg#docs/api.md` |
-| local path | `./path`, `/abs/path`, `~/path`, `file://…` |
+| local path                 | `./path`, `/abs/path`, `~/path`, `file://…`           |
 
 Refs are taken from the **last** `@`, so they may contain `/`. Subpaths can never
 escape the repository root.
@@ -148,21 +153,21 @@ control the envelope with `--audit` / `--no-audit`.
 
 ## Commands
 
-| Command | Purpose |
-|---|---|
-| `hangar` | Browse the catalog and install interactively |
-| `hangar install <source>` | Install skills (interactive or headless) |
-| `hangar install` | Reinstall everything from the lockfile |
-| `hangar list` | Manage installed skills (interactive on a terminal) |
-| `hangar list <source>` | List the skills/references a source contains |
-| `hangar info <skill\|source>` | Render a skill's SKILL.md |
-| `hangar update [skill]` | Re-resolve and update installed skills |
-| `hangar pin <skill> [ref]` | Pin a skill (optionally reinstall at a ref) |
-| `hangar unpin <skill>` | Clear a skill's pinned flag |
-| `hangar remove <skill>` | Remove a skill/reference everywhere |
-| `hangar nuke [-y]` | Remove every installed skill/reference (respects flags) |
-| `hangar profile save\|apply\|list\|rm` | Save and re-apply named skill sets |
-| `hangar doctor [--fix]` | Diagnose and repair drift |
+| Command                                | Purpose                                                 |
+| -------------------------------------- | ------------------------------------------------------- |
+| `hangar`                               | Browse the catalog and install interactively            |
+| `hangar install <source>`              | Install skills (interactive or headless)                |
+| `hangar install`                       | Reinstall everything from the lockfile                  |
+| `hangar list`                          | Manage installed skills (interactive on a terminal)     |
+| `hangar list <source>`                 | List the skills/references a source contains            |
+| `hangar info <skill\|source>`          | Render a skill's SKILL.md                               |
+| `hangar update [skill]`                | Re-resolve and update installed skills                  |
+| `hangar pin <skill> [ref]`             | Pin a skill (optionally reinstall at a ref)             |
+| `hangar unpin <skill>`                 | Clear a skill's pinned flag                             |
+| `hangar remove <skill>`                | Remove a skill/reference everywhere                     |
+| `hangar nuke [-y]`                     | Remove every installed skill/reference (respects flags) |
+| `hangar profile save\|apply\|list\|rm` | Save and re-apply named skill sets                      |
+| `hangar doctor [--fix]`                | Diagnose and repair drift                               |
 
 Common flags: `-a/--agent` (repeatable target), `-g/--global`, `-A/--all`,
 `-y/--yes`, `--no-tty`, `--json`, `-v/--verbose`, `--cwd`.
@@ -232,12 +237,12 @@ Releases are cut automatically from commit history, so commits (and **PR titles*
 since PRs are squash-merged) follow
 [Conventional Commits](https://www.conventionalcommits.org):
 
-| Prefix | Example | Effect on the next release |
-|---|---|---|
-| `fix:` | `fix: handle empty lockfile` | Patch (`0.1.0` → `0.1.1`) |
-| `feat:` | `feat: add scoop support` | Minor (`0.1.0` → `0.2.0`) |
-| `feat!:` / `BREAKING CHANGE:` footer | `feat!: drop legacy layout` | Major\* |
-| `docs:`, `refactor:`, `chore:`, `test:`, … | `chore: bump deps` | No release on its own |
+| Prefix                                     | Example                      | Effect on the next release |
+| ------------------------------------------ | ---------------------------- | -------------------------- |
+| `fix:`                                     | `fix: handle empty lockfile` | Patch (`0.1.0` → `0.1.1`)  |
+| `feat:`                                    | `feat: add scoop support`    | Minor (`0.1.0` → `0.2.0`)  |
+| `feat!:` / `BREAKING CHANGE:` footer       | `feat!: drop legacy layout`  | Major\*                    |
+| `docs:`, `refactor:`, `chore:`, `test:`, … | `chore: bump deps`           | No release on its own      |
 
 \* While Hangar is pre-1.0, breaking changes bump the **minor** version, not the
 major. Force an exact version any time with a `Release-As: X.Y.Z` commit footer.
