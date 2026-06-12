@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/louisescher/hangar/compare/v0.2.0...v0.2.1) (2026-06-12)
+
+
+### Bug Fixes
+
+* Include full URL example in placeholders & hints ([#8](https://github.com/louisescher/hangar/issues/8)) ([8a287e2](https://github.com/louisescher/hangar/commit/8a287e2ba694da2daa7369ca74fcd91e177d5d8f))
+
 ## [0.2.0](https://github.com/louisescher/hangar/compare/v0.1.0...v0.2.0) (2026-06-12)
 
 
