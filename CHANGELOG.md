@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0](https://github.com/louisescher/hangar/compare/v0.1.0...v0.2.0) (2026-06-12)
+
+
+### Features
+
+* Add npmx shortcut to npm package pages ([#6](https://github.com/louisescher/hangar/issues/6)) ([f273ace](https://github.com/louisescher/hangar/commit/f273ace64c52de770c1cae3216c5f321e661c9ae))
+* Remove catalog in favor of home screen ([#5](https://github.com/louisescher/hangar/issues/5)) ([61d287d](https://github.com/louisescher/hangar/commit/61d287da2dbc45bdaf07d0616a395a553e029099))
+
+
+### Bug Fixes
+
+* Excessive hang/loading times for npm packages ([#7](https://github.com/louisescher/hangar/issues/7)) ([94ed39e](https://github.com/louisescher/hangar/commit/94ed39e4c2c2e92cd69d6a821a6f74ba7f963a35))
+* Make homebrew release non-prebuilt ([4d87ff7](https://github.com/louisescher/hangar/commit/4d87ff73f69d5b4790855043c9b9cd0899051c94))
+
 ## 0.1.0 (2026-06-11)
 
 
