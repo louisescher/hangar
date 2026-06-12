@@ -118,7 +118,7 @@ func (s *treeModel) layout(app *App) {
 	s.preview.Height = h
 	if s.previewW != rightW || s.glam == nil {
 		s.previewW = rightW
-		r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(rightW))
+		r, err := glamour.NewTermRenderer(glamour.WithStandardStyle(app.glamStyle), glamour.WithWordWrap(rightW))
 		if err == nil {
 			s.glam = r
 		}
