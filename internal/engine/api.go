@@ -6,7 +6,6 @@ import (
 
 	"github.com/louisescher/hangar/internal/agents"
 	"github.com/louisescher/hangar/internal/discover"
-	"github.com/louisescher/hangar/internal/index"
 )
 
 // Agent is the resolved-agent type surfaced to callers (CLI and TUI).
@@ -51,7 +50,3 @@ func (e *Engine) AgentDefs() []agents.Def {
 	return agents.Defs
 }
 
-// Index returns the embedded curated catalog of skill sources.
-func (e *Engine) Index() []index.Entry {
-	return index.Catalog()
-}
