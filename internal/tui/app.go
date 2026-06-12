@@ -41,11 +41,12 @@ type screen interface {
 
 // App is the root bubbletea model.
 type App struct {
-	eng     EngineAPI
-	keys    keyMap
-	th      theme
-	prefs   config.Prefs
-	baseCtx context.Context
+	eng       EngineAPI
+	keys      keyMap
+	th        theme
+	prefs     config.Prefs
+	glamStyle string // "dark" or "light"; set by Run() before Bubble Tea starts
+	baseCtx   context.Context
 
 	width, height int
 	state         state
@@ -142,6 +143,7 @@ func New(opt Options) *App {
 		keys:      defaultKeys(),
 		th:        newTheme(),
 		prefs:     opt.Prefs,
+		glamStyle: "dark", // Run() overrides after querying the terminal
 		baseCtx:   base,
 		global:    opt.Global,
 		security:  opt.Security,

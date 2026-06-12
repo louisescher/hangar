@@ -193,7 +193,7 @@ func (s *infoDetailModel) layout(app *App) {
 	s.preview.Height = h
 	if s.previewW != rightW || s.glam == nil {
 		s.previewW = rightW
-		if r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(rightW)); err == nil {
+		if r, err := glamour.NewTermRenderer(glamour.WithStandardStyle(app.glamStyle), glamour.WithWordWrap(rightW)); err == nil {
 			s.glam = r
 		}
 	}
