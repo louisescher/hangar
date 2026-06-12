@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -14,6 +16,7 @@ import (
 
 	"github.com/louisescher/hangar/internal/config"
 	"github.com/louisescher/hangar/internal/engine"
+	"github.com/louisescher/hangar/internal/spec"
 )
 
 type checkState int
@@ -239,6 +242,15 @@ func (s *treeModel) handleKey(app *App, msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return func() tea.Msg { return nav(stateAgents) }
+	case key.Matches(msg, app.keys.OpenNPMX):
+		if app.src.Kind == spec.KindNPM && app.src.Pkg != "" {
+			url := "https://npmx.dev/package/" + app.src.Pkg
+			return func() tea.Msg {
+				openBrowser(url)
+				return nil
+			}
+		}
+		return nil
 	case key.Matches(msg, app.keys.Back):
 		return func() tea.Msg { return navBackMsg{} }
 	}
@@ -387,11 +399,15 @@ func (s *treeModel) view(app *App) string {
 			key.NewBinding(key.WithHelp("esc", "back to list")),
 		)
 	default:
-		help = app.helpView(
+		bindings := []key.Binding{
 			app.keys.Toggle, app.keys.Expand, app.keys.Collapse,
 			key.NewBinding(key.WithHelp("tab", "scroll preview")),
 			app.keys.View, app.keys.Filter, app.keys.Confirm,
-		)
+		}
+		if app.src.Kind == spec.KindNPM && app.src.Pkg != "" {
+			bindings = append(bindings, app.keys.OpenNPMX)
+		}
+		help = app.helpView(bindings...)
 	}
 	return body + "\n" + status + "\n" + help
 }
@@ -453,6 +469,19 @@ func (s *treeModel) rowView(app *App, r visRow, atCursor bool) string {
 		line += app.th.faint.Render("  — " + n.skill.Description)
 	}
 	return truncate(line, leftWidth(app))
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	_ = cmd.Start()
 }
 
 func leftWidth(app *App) int {

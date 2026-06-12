@@ -18,6 +18,7 @@ type keyMap struct {
 	Back     key.Binding
 	Quit     key.Binding
 	Help     key.Binding
+	OpenNPMX key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -35,5 +36,6 @@ func defaultKeys() keyMap {
 		Back:     key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 		Quit:     key.NewBinding(key.WithKeys("ctrl+c", "q"), key.WithHelp("q", "quit")),
 		Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		OpenNPMX: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "open in npmx.dev")),
 	}
 }
