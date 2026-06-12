@@ -11,7 +11,6 @@ import (
 	"github.com/louisescher/hangar/internal/config"
 	"github.com/louisescher/hangar/internal/discover"
 	"github.com/louisescher/hangar/internal/engine"
-	"github.com/louisescher/hangar/internal/index"
 	"github.com/louisescher/hangar/internal/install"
 	"github.com/louisescher/hangar/internal/lockfile"
 	"github.com/louisescher/hangar/internal/spec"
@@ -26,9 +25,6 @@ type fakeEngine struct {
 	removed      map[string]bool
 }
 
-func (f *fakeEngine) Index() []index.Entry {
-	return []index.Entry{{Name: "demo", Spec: "owner/repo", Description: "a demo source"}}
-}
 func (f *fakeEngine) Discover(_ context.Context, _ spec.SourceSpec) (*engine.Discovered, error) {
 	return f.disc, nil
 }
@@ -166,12 +162,26 @@ func TestFlowEndToEnd(t *testing.T) {
 	if m.state != stateCatalog {
 		t.Fatalf("start state = %v, want catalog", m.state)
 	}
-	if !strings.Contains(m.View(), "demo") {
-		t.Errorf("catalog view should list the demo entry:\n%s", m.View())
+	if !strings.Contains(m.View(), "agent skills") {
+		t.Errorf("catalog home view should show the tagline:\n%s", m.View())
 	}
 
-	// Choose the highlighted catalog entry → crawl.
+	// Pressing enter with no input should error, not navigate.
 	_, cmd := m.Update(keyMsg("enter"))
+	pump(m, cmd)
+	if m.state != stateCatalog {
+		t.Fatalf("enter with empty input should stay on catalog, got state %v", m.state)
+	}
+	if m.err == nil {
+		t.Error("enter with empty input should set an error")
+	}
+	m.err = nil
+
+	// Type a source and choose it → crawl.
+	for _, c := range "owner/repo" {
+		m.Update(keyMsg(string(c)))
+	}
+	_, cmd = m.Update(keyMsg("enter"))
 	pump(m, cmd)
 	if m.state != stateCrawling {
 		t.Fatalf("after choose, state = %v, want crawling", m.state)

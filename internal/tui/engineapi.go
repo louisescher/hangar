@@ -10,7 +10,6 @@ import (
 	"github.com/louisescher/hangar/internal/agents"
 	"github.com/louisescher/hangar/internal/discover"
 	"github.com/louisescher/hangar/internal/engine"
-	"github.com/louisescher/hangar/internal/index"
 	"github.com/louisescher/hangar/internal/install"
 	"github.com/louisescher/hangar/internal/lockfile"
 	"github.com/louisescher/hangar/internal/spec"
@@ -19,8 +18,6 @@ import (
 // EngineAPI is the surface the TUI depends on. *engine.Engine satisfies it; a
 // fake implements it in tests.
 type EngineAPI interface {
-	// Index returns the curated catalog for the browse screen.
-	Index() []index.Entry
 	// Discover fetches a source and crawls it for skills and references. The
 	// returned *engine.Discovered must be Closed by the caller.
 	Discover(ctx context.Context, s spec.SourceSpec) (*engine.Discovered, error)
