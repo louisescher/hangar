@@ -36,16 +36,6 @@ changelog:
 release:
   mode: keep-existing # attach assets to the release release-please created
 
-# macOS: Homebrew cask, published to the existing louisescher/homebrew-tap.
-homebrew_casks:
-  - name: hangar
-    repository:
-      owner: louisescher
-      name: homebrew-tap
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/louisescher/hangar"
-    description: "A TUI package manager for AI agent skills"
-
 # Windows: Scoop manifest, published to the existing louisescher/scoop-bucket.
 scoops:
   - name: hangar
