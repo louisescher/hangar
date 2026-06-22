@@ -1,3 +1,7 @@
+<img width="1480" height="766" alt="image" src="https://github.com/user-attachments/assets/b4523d3a-2422-41f7-916d-4ffa3cc153ea" />
+
+---
+
 # Hangar ✈
 
 A TUI package manager for **Agent Skills** — the `SKILL.md` files that AI coding
