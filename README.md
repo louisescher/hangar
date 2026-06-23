@@ -8,9 +8,10 @@ A TUI package manager for **Agent Skills** — the `SKILL.md` files that AI codi
 agents (Claude Code, Cursor, Copilot, opencode, Codex, Gemini CLI, and ~50
 others) load to extend their capabilities.
 
-Hangar discovers skills in **GitHub repositories** and **npm packages**, lets you
-pick exactly which ones to install through an interactive tree picker, and wires
-them into every agent on your machine that follows the `.agents/` convention.
+Hangar discovers skills in **Git repositories** (GitHub, GitLab, Bitbucket,
+Forgejo/Gitea, and self-hosted hosts) and **npm packages**, lets you pick exactly
+which ones to install through an interactive tree picker, and wires them into
+every agent on your machine that follows the `.agents/` convention.
 
 Inspired by [`withastro/rosie`](https://github.com/withastro/rosie), with a
 TUI-first workflow, subpath installs, real npm-registry fetching, a TOML
@@ -91,12 +92,39 @@ hangar doctor
 | …with a subpath            | `owner/repo/path/to/skills`                           |
 | …pinned to a ref           | `owner/repo@v1.2.0` or `owner/repo@release/1.x`       |
 | …a single skill            | `owner/repo#skill-name`                               |
+| GitHub URL                 | `https://github.com/owner/repo/tree/main/sub`         |
+| GitLab repo / URL          | `https://gitlab.com/group/proj/-/tree/main/sub`       |
+| Bitbucket repo / URL       | `https://bitbucket.org/owner/repo/src/main/sub`       |
+| Forgejo / Gitea / Codeberg | `https://codeberg.org/owner/repo/src/branch/main/sub` |
 | npm package                | `npm:lodash`, `npm:@scope/pkg`                        |
 | …a version / subpath / doc | `npm:pkg@1.2.0`, `npm:pkg/sub`, `npm:pkg#docs/api.md` |
 | local path                 | `./path`, `/abs/path`, `~/path`, `file://…`           |
 
-Refs are taken from the **last** `@`, so they may contain `/`. Subpaths can never
-escape the repository root.
+A pasted browser or clone URL from any supported host "just works"; the ref and
+subpath are read from the provider's URL markers. A bare `owner/repo` always
+means GitHub. Refs are taken from the **last** `@`, so they may contain `/`.
+Subpaths can never escape the repository root.
+
+### Other Git hosts & private repos
+
+GitHub auth comes from `$GH_TOKEN`/`$GITHUB_TOKEN` or the `gh` CLI. For the other
+providers, set a per-provider token — `$GITLAB_TOKEN`, `$BITBUCKET_TOKEN`,
+`$FORGEJO_TOKEN`/`$GITEA_TOKEN` — or store tokens (and register **self-hosted
+hosts**) in `~/.config/hangar/config.toml`:
+
+```toml
+[forges]
+gitlab_token    = "..."
+bitbucket_token = "..."
+
+# Register a self-hosted host so its URLs are recognized:
+[forges.hosts."git.company.com"]
+type  = "gitlab"            # gitlab | forgejo | gitea | bitbucket | generic
+token = "${COMPANY_TOKEN}"  # ${ENV} references are expanded
+```
+
+Environment variables take precedence over config-file tokens. A project-local
+`./hangar.toml` overrides the user file.
 
 ## The interactive picker
 

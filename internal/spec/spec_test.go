@@ -169,6 +169,122 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestParseForges(t *testing.T) {
+	// A self-hosted host registered by config: git.company.com runs GitLab.
+	hosts := map[string]Forge{"git.company.com": ForgeGitLab}
+
+	tests := []struct {
+		name string
+		in   string
+		want SourceSpec
+	}{
+		{
+			name: "gitlab url bare",
+			in:   "https://gitlab.com/group/proj",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeGitLab, Host: "https://gitlab.com", Owner: "group", Repo: "proj"},
+		},
+		{
+			name: "gitlab url tree marker",
+			in:   "https://gitlab.com/group/proj/-/tree/main/sub/dir",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeGitLab, Host: "https://gitlab.com", Owner: "group", Repo: "proj", Ref: "main", Pinned: true, Subpath: "sub/dir"},
+		},
+		{
+			name: "gitlab url blob roots at dir",
+			in:   "https://gitlab.com/group/proj/-/blob/main/sub/SKILL.md",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeGitLab, Host: "https://gitlab.com", Owner: "group", Repo: "proj", Ref: "main", Pinned: true, Subpath: "sub"},
+		},
+		{
+			name: "gitlab ssh clone url",
+			in:   "git@gitlab.com:group/proj.git",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeGitLab, Host: "https://gitlab.com", Owner: "group", Repo: "proj"},
+		},
+		{
+			name: "gitlab scheme-less shorthand with ref and skill",
+			in:   "gitlab.com/group/proj@v1#pdf",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeGitLab, Host: "https://gitlab.com", Owner: "group", Repo: "proj", Ref: "v1", Pinned: true, Skill: "pdf"},
+		},
+		{
+			name: "codeberg forgejo bare",
+			in:   "https://codeberg.org/owner/repo",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeForgejo, Host: "https://codeberg.org", Owner: "owner", Repo: "repo"},
+		},
+		{
+			name: "forgejo src/branch marker",
+			in:   "https://codeberg.org/owner/repo/src/branch/main/sub",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeForgejo, Host: "https://codeberg.org", Owner: "owner", Repo: "repo", Ref: "main", Pinned: true, Subpath: "sub"},
+		},
+		{
+			name: "forgejo src/tag marker",
+			in:   "https://codeberg.org/owner/repo/src/tag/v1.0/sub",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeForgejo, Host: "https://codeberg.org", Owner: "owner", Repo: "repo", Ref: "v1.0", Pinned: true, Subpath: "sub"},
+		},
+		{
+			name: "forgejo raw/branch roots at dir",
+			in:   "https://codeberg.org/owner/repo/raw/branch/main/sub/SKILL.md",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeForgejo, Host: "https://codeberg.org", Owner: "owner", Repo: "repo", Ref: "main", Pinned: true, Subpath: "sub"},
+		},
+		{
+			name: "bitbucket bare",
+			in:   "https://bitbucket.org/owner/repo",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeBitbucket, Host: "https://bitbucket.org", Owner: "owner", Repo: "repo"},
+		},
+		{
+			name: "bitbucket src marker",
+			in:   "https://bitbucket.org/owner/repo/src/main/sub",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeBitbucket, Host: "https://bitbucket.org", Owner: "owner", Repo: "repo", Ref: "main", Pinned: true, Subpath: "sub"},
+		},
+		{
+			name: "self-hosted from config map",
+			in:   "https://git.company.com/team/repo/-/tree/main/x",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeGitLab, Host: "https://git.company.com", Owner: "team", Repo: "repo", Ref: "main", Pinned: true, Subpath: "x"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseWithForges(tt.in, hosts)
+			if err != nil {
+				t.Fatalf("ParseWithForges(%q) unexpected error: %v", tt.in, err)
+			}
+			tt.want.Raw = tt.in
+			if got != tt.want {
+				t.Errorf("ParseWithForges(%q)\n got = %+v\nwant = %+v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseForgeErrors(t *testing.T) {
+	bad := []string{
+		"https://random.host/owner/repo",            // unknown, unconfigured host
+		"https://gitlab.com/owner",                  // missing repo
+		"https://gitlab.com/owner/repo/-/tree",      // tree marker without a ref
+		"https://gitlab.com/o/r/-/tree/main/../etc", // subpath traversal
+	}
+	for _, in := range bad {
+		t.Run(in, func(t *testing.T) {
+			if got, err := ParseWithForges(in, nil); err == nil {
+				t.Errorf("ParseWithForges(%q) expected error, got %+v", in, got)
+			}
+		})
+	}
+}
+
+func TestParseGitHubStillDefaults(t *testing.T) {
+	// Regression: bare owner/repo and github.com URLs must stay KindGitHub even
+	// with a forge host map present.
+	hosts := map[string]Forge{"git.company.com": ForgeGitLab}
+	for _, in := range []string{"anthropics/skills", "https://github.com/anthropics/skills"} {
+		got, err := ParseWithForges(in, hosts)
+		if err != nil {
+			t.Fatalf("ParseWithForges(%q): %v", in, err)
+		}
+		if got.Kind != KindGitHub {
+			t.Errorf("ParseWithForges(%q) Kind = %v, want KindGitHub", in, got.Kind)
+		}
+	}
+}
+
 func TestParseHomeExpansion(t *testing.T) {
 	t.Setenv("HOME", "/home/tester")
 	got, err := Parse("~/skills/local")

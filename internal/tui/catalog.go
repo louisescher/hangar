@@ -8,8 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/louisescher/hangar/internal/spec"
 )
 
 const asciiLogo = `          \            /               ██╗  ██╗  █████╗  ███╗   ██╗  ██████╗   █████╗  ██████╗
@@ -38,7 +36,7 @@ type catalogModel struct {
 func (s *catalogModel) enter(app *App) tea.Cmd {
 	if !s.ready {
 		s.input = textinput.New()
-		s.input.Placeholder = "owner/repo  ·  owner/repo/subpath  ·  https://github.com/owner/repo  ·  npm:package"
+		s.input.Placeholder = "owner/repo  ·  https://github.com/owner/repo  ·  https://gitlab.com/group/proj  ·  https://codeberg.org/owner/repo  ·  npm:package"
 		s.input.Prompt = "  "
 		s.ready = true
 	}
@@ -90,7 +88,7 @@ func (s *catalogModel) choose(app *App) tea.Cmd {
 		app.err = fmt.Errorf("type a source to install, e.g. owner/repo or npm:package")
 		return nil
 	}
-	sp, err := spec.Parse(raw)
+	sp, err := app.eng.Parse(raw)
 	if err != nil {
 		app.err = err
 		return nil
@@ -162,7 +160,7 @@ func (s *catalogModel) homeView(app *App) string {
 	b.WriteString("\n")
 
 	// Example specs
-	b.WriteString(centerLine(faintStyle.Render("e.g.  anthropics/skills  ·  owner/repo/subpath  ·  https://github.com/owner/repo  ·  npm:@scope/pkg")) + "\n")
+	b.WriteString(centerLine(faintStyle.Render("e.g.  anthropics/skills  ·  https://github.com/owner/repo  ·  https://gitlab.com/group/proj  ·  npm:@scope/pkg")) + "\n")
 	b.WriteString("\n")
 
 	// Help

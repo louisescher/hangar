@@ -25,6 +25,9 @@ type fakeEngine struct {
 	removed      map[string]bool
 }
 
+func (f *fakeEngine) Parse(raw string) (spec.SourceSpec, error) {
+	return spec.Parse(raw)
+}
 func (f *fakeEngine) Discover(_ context.Context, _ spec.SourceSpec) (*engine.Discovered, error) {
 	return f.disc, nil
 }

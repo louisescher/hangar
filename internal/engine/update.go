@@ -79,7 +79,7 @@ func (e *Engine) updateTargets(ctx context.Context, baseDir string, targets []lo
 	log := audit.New(audit.OpUpdate)
 	rep := install.Report{Audit: log}
 
-	for _, g := range groupEntries(targets) {
+	for _, g := range e.groupEntries(targets) {
 		s := g.spec
 		if opt.OnProgress != nil {
 			opt.OnProgress(install.Event{Phase: "fetching", Name: sourceLabel(s)})
@@ -98,7 +98,7 @@ func (e *Engine) updateTargets(ctx context.Context, baseDir string, targets []lo
 
 		for _, entry := range g.entries {
 			// Tag-rewrite detection: a pinned tag whose SHA moved underneath us.
-			if s.Kind == spec.KindGitHub && entry.Pinned && d.IsTag &&
+			if s.Kind.IsGitTarball() && entry.Pinned && d.IsTag &&
 				d.Ref == entry.Ref && entry.SHA != "" && d.SHA != entry.SHA {
 				log.AddFinding(audit.TagRewriteFinding(entry.Name, entry.Ref, entry.SHA, d.SHA))
 			}
@@ -151,44 +151,84 @@ func (e *Engine) updateTargets(ctx context.Context, baseDir string, targets []lo
 
 // specFromEntry reconstructs a source spec from a lockfile entry so it can be
 // re-resolved and re-fetched. Auto (unpinned) entries drop the ref to pick up
-// the latest; pinned entries re-resolve their exact ref.
-func specFromEntry(e lockfile.Entry) (spec.SourceSpec, error) {
+// the latest; pinned entries re-resolve their exact ref. Self-hosted forge
+// hosts are resolved via the engine's configured registry.
+func (e *Engine) specFromEntry(entry lockfile.Entry) (spec.SourceSpec, error) {
 	switch {
-	case strings.HasPrefix(e.Source, "npm:"):
+	case strings.HasPrefix(entry.Source, "npm:"):
 		s := spec.SourceSpec{
 			Kind:    spec.KindNPM,
-			Pkg:     strings.TrimPrefix(e.Source, "npm:"),
-			Subpath: e.Subpath,
-			File:    e.File, // set for reference entries; "" for skills
-			Pinned:  e.Pinned,
+			Pkg:     strings.TrimPrefix(entry.Source, "npm:"),
+			Subpath: entry.Subpath,
+			File:    entry.File, // set for reference entries; "" for skills
+			Pinned:  entry.Pinned,
 		}
-		if e.Pinned {
-			s.Ref = e.Version // re-resolve the pinned exact version
+		if entry.Pinned {
+			s.Ref = entry.Version // re-resolve the pinned exact version
 		}
 		return s, nil
-	case strings.HasPrefix(e.Source, "file://"):
+	case strings.HasPrefix(entry.Source, "file://"):
 		return spec.SourceSpec{
 			Kind:  spec.KindLocal,
-			Path:  strings.TrimPrefix(e.Source, "file://"),
-			Skill: e.Name,
+			Path:  strings.TrimPrefix(entry.Source, "file://"),
+			Skill: entry.Name,
 		}, nil
+	case strings.HasPrefix(entry.Source, "http://"), strings.HasPrefix(entry.Source, "https://"):
+		// A non-GitHub forge: source is the canonical "https://host/owner/repo".
+		s, err := specFromForgeURL(entry.Source, e.hostForges)
+		if err != nil {
+			return spec.SourceSpec{}, err
+		}
+		s.Subpath = entry.Subpath
+		s.Pinned = entry.Pinned
+		if entry.Pinned {
+			s.Ref = entry.Ref
+		}
+		return s, nil
 	default:
-		owner, repo, ok := strings.Cut(e.Source, "/")
+		owner, repo, ok := strings.Cut(entry.Source, "/")
 		if !ok {
-			return spec.SourceSpec{}, fmt.Errorf("malformed github source %q", e.Source)
+			return spec.SourceSpec{}, fmt.Errorf("malformed github source %q", entry.Source)
 		}
 		s := spec.SourceSpec{
 			Kind:    spec.KindGitHub,
 			Owner:   owner,
 			Repo:    repo,
-			Subpath: e.Subpath,
-			Pinned:  e.Pinned,
+			Subpath: entry.Subpath,
+			Pinned:  entry.Pinned,
 		}
-		if e.Pinned {
-			s.Ref = e.Ref
+		if entry.Pinned {
+			s.Ref = entry.Ref
 		}
 		return s, nil
 	}
+}
+
+// specFromForgeURL reconstructs a KindGit spec's host/owner/repo/forge from a
+// canonical "https://host/owner/repo" lockfile source. A host not present in
+// the registry falls back to ForgeGeneric so committed lockfiles still resolve
+// public repos on a machine without that host configured.
+func specFromForgeURL(source string, hosts map[string]spec.Forge) (spec.SourceSpec, error) {
+	rest := strings.TrimPrefix(strings.TrimPrefix(source, "https://"), "http://")
+	host, ownerRepo, ok := strings.Cut(rest, "/")
+	if !ok {
+		return spec.SourceSpec{}, fmt.Errorf("malformed git source %q", source)
+	}
+	owner, repo, ok := strings.Cut(ownerRepo, "/")
+	if !ok || owner == "" || repo == "" {
+		return spec.SourceSpec{}, fmt.Errorf("malformed git source %q", source)
+	}
+	forge, ok := spec.ForgeForHost(host, hosts)
+	if !ok {
+		forge = spec.ForgeGeneric
+	}
+	return spec.SourceSpec{
+		Kind:  spec.KindGit,
+		Forge: forge,
+		Host:  "https://" + host,
+		Owner: owner,
+		Repo:  repo,
+	}, nil
 }
 
 func pickByName(skills []Skill, name string) []Skill {

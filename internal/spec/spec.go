@@ -6,6 +6,8 @@
 //	npm     := "npm:" ["@"<scope> "/"] <pkg> ["/" <subpath>] ["@" <version>] ["#" <file>]
 //	ghURL   := ["https://"|"http://"|"ssh://"|"git@"] ["www."] "github.com" ("/"|":")
 //	           <owner> "/" <repo>[".git"] ["/" ("tree"|"blob") "/" <ref> ["/" <subpath>]]
+//	forgeURL := ["https://"|"http://"|"ssh://"|"git@"] <host> ("/"|":")
+//	           <owner> "/" <repo>[".git"] [<provider marker> "/" <ref> ["/" <subpath>]]
 //	github  := <owner> "/" <repo> ["/" <subpath>] ["@" <ref>] ["#" <skill>]
 //
 // Disambiguation is order-sensitive and deliberate:
@@ -16,7 +18,13 @@
 //     a "/tree/<ref>/..." or "/blob/<ref>/..." URL is taken as the single segment
 //     after tree/blob, so a branch name containing "/" can't be disambiguated
 //     from a URL — use the owner/repo/sub@ref form for those. Only github.com is
-//     recognized (not GitHub Enterprise hosts).
+//     recognized as the bare-form default.
+//   - Non-github.com forge URLs (GitLab, Bitbucket, Forgejo/Gitea, …) are parsed
+//     by parseForgeURL into KindGit, with the host carried on the spec. The
+//     public hosts (gitlab.com, bitbucket.org, codeberg.org) are built in;
+//     self-hosted hosts are resolved via the map passed to ParseWithForges. Each
+//     provider's browser-URL markers supply the ref/subpath (GitLab "/-/tree/",
+//     Forgejo/Gitea "/src/branch/", Bitbucket "/src/").
 //   - For GitHub, the "#skill" suffix is peeled before the "@ref" suffix: the
 //     grammar places #skill last, so given owner/repo@v2#bar we must remove
 //     "#bar" first, then take "@v2" as the ref. The ref is taken from the LAST
@@ -38,6 +46,7 @@ const (
 	KindGitHub Kind = iota
 	KindLocal
 	KindNPM
+	KindGit // any non-GitHub git forge (host carried in Host/Forge)
 )
 
 func (k Kind) String() string {
@@ -48,18 +57,58 @@ func (k Kind) String() string {
 		return "local"
 	case KindNPM:
 		return "npm"
+	case KindGit:
+		return "git"
 	default:
 		return "unknown"
 	}
+}
+
+// IsGitTarball reports whether the kind is fetched as a git-host tarball (a
+// repository resolved by ref/SHA), which covers both GitHub and the generic
+// git forges. Engine code that special-cases "git repo with a ref" should gate
+// on this rather than KindGitHub alone.
+func (k Kind) IsGitTarball() bool { return k == KindGitHub || k == KindGit }
+
+// Forge identifies the API/URL dialect of a git host. GitHub keeps its own Kind
+// and dedicated fetcher; the rest are served by the generic gitforge fetcher.
+type Forge string
+
+const (
+	ForgeGitHub    Forge = "github"
+	ForgeGitLab    Forge = "gitlab"
+	ForgeForgejo   Forge = "forgejo" // also Gitea and Codeberg
+	ForgeBitbucket Forge = "bitbucket"
+	ForgeGeneric   Forge = "generic"
+)
+
+// ForgeFromString maps a config "type" value to a Forge. "gitea" normalizes to
+// ForgeForgejo (same URL dialect).
+func ForgeFromString(s string) (Forge, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "github":
+		return ForgeGitHub, true
+	case "gitlab":
+		return ForgeGitLab, true
+	case "forgejo", "gitea":
+		return ForgeForgejo, true
+	case "bitbucket":
+		return ForgeBitbucket, true
+	case "generic":
+		return ForgeGeneric, true
+	}
+	return "", false
 }
 
 // SourceSpec is the parsed form of a source specifier.
 type SourceSpec struct {
 	Kind Kind
 
-	// GitHub
+	// GitHub / git forges
 	Owner string
 	Repo  string
+	Host  string // full origin for KindGit (e.g. "https://gitlab.com"); "" for GitHub
+	Forge Forge  // forge dialect for KindGit
 
 	// npm
 	Pkg  string // package name, including @scope for scoped packages
@@ -77,8 +126,17 @@ type SourceSpec struct {
 	Raw string // the original, unparsed input
 }
 
-// Parse turns a source specifier string into a SourceSpec.
+// Parse turns a source specifier string into a SourceSpec. Only github.com URLs
+// and the public forge hosts are recognized; self-hosted hosts require
+// ParseWithForges with a host→forge map.
 func Parse(s string) (SourceSpec, error) {
+	return ParseWithForges(s, nil)
+}
+
+// ParseWithForges is Parse with an additional map of self-hosted host →
+// Forge (built by the engine from the user's config file). github.com and the
+// built-in public hosts are always recognized; the map only extends them.
+func ParseWithForges(s string, hosts map[string]Forge) (SourceSpec, error) {
 	raw := s
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -92,9 +150,227 @@ func Parse(s string) (SourceSpec, error) {
 		return parseNPM(strings.TrimPrefix(s, "npm:"), raw)
 	case isGitHubURL(s):
 		return parseGitHubURL(s, raw)
+	case isForgeURL(s):
+		return parseForgeURL(s, raw, hosts)
 	default:
 		return parseGitHub(s, raw)
 	}
+}
+
+// publicForgeHosts maps the well-known public forge hosts to their dialect.
+// Self-hosted hosts are supplied via ParseWithForges' map.
+var publicForgeHosts = map[string]Forge{
+	"bitbucket.org": ForgeBitbucket,
+	"codeberg.org":  ForgeForgejo,
+	"gitlab.com":    ForgeGitLab,
+}
+
+// ForgeForHost resolves a host to its forge dialect, consulting the built-in
+// public hosts first and then the caller-supplied self-hosted map.
+func ForgeForHost(host string, hosts map[string]Forge) (Forge, bool) {
+	host = strings.TrimPrefix(strings.ToLower(host), "www.")
+	if f, ok := publicForgeHosts[host]; ok {
+		return f, true
+	}
+	if f, ok := hosts[host]; ok {
+		return f, true
+	}
+	return "", false
+}
+
+// isForgeURL reports whether s is a non-github.com git host URL (https/http/ssh
+// clone or browser link, or a scheme-less "host/owner/repo" where the first
+// segment looks like a hostname). Checked after isGitHubURL, so github.com never
+// reaches here. A bare "owner/repo" has no dot in its first segment and is left
+// to the GitHub default.
+func isForgeURL(s string) bool {
+	l := strings.ToLower(s)
+	for _, sc := range []string{"https://", "http://", "ssh://", "git@"} {
+		if strings.HasPrefix(l, sc) {
+			return true
+		}
+	}
+	if i := strings.IndexByte(s, '/'); i > 0 {
+		first := s[:i]
+		if strings.Contains(first, ".") && !strings.Contains(first, "@") {
+			return true
+		}
+	}
+	return false
+}
+
+// stripSchemeHost splits a git URL into its host and the remaining path. It
+// handles https/http/ssh schemes, the scp-like "git@host:path" form, and
+// scheme-less "host/path".
+func stripSchemeHost(s string) (host, rest string) {
+	l := strings.ToLower(s)
+	if strings.HasPrefix(l, "git@") {
+		s = s[len("git@"):]
+		if i := strings.IndexByte(s, ':'); i >= 0 { // scp form: host:path
+			return s[:i], s[i+1:]
+		}
+		if i := strings.IndexByte(s, '/'); i >= 0 {
+			return s[:i], s[i+1:]
+		}
+		return s, ""
+	}
+	for _, sc := range []string{"https://", "http://", "ssh://"} {
+		if strings.HasPrefix(l, sc) {
+			s = s[len(sc):]
+			break
+		}
+	}
+	s = strings.TrimPrefix(s, "git@") // ssh://git@host/...
+	if i := strings.IndexByte(s, '/'); i >= 0 {
+		return s[:i], s[i+1:]
+	}
+	return s, ""
+}
+
+// parseForgeURL turns a non-github.com forge URL into a KindGit SourceSpec.
+// URLs with an explicit scheme are treated as browser/clone links (query and
+// fragment dropped; the ref/subpath come from the provider's path markers).
+// Scheme-less input is treated as the shorthand grammar, peeling "#skill" and
+// "@ref" like the bare GitHub form.
+func parseForgeURL(s, raw string, hosts map[string]Forge) (SourceSpec, error) {
+	hadScheme := false
+	l := strings.ToLower(s)
+	for _, sc := range []string{"https://", "http://", "ssh://", "git@"} {
+		if strings.HasPrefix(l, sc) {
+			hadScheme = true
+			break
+		}
+	}
+
+	host, rest := stripSchemeHost(s)
+	host = strings.ToLower(host)
+	if host == "" {
+		return SourceSpec{}, fmt.Errorf("invalid forge URL %q: missing host", raw)
+	}
+	forge, ok := ForgeForHost(host, hosts)
+	if !ok {
+		return SourceSpec{}, fmt.Errorf("unknown git host %q: register it in ~/.config/hangar/config.toml under [forges.hosts.%q] with type = \"gitlab\" | \"forgejo\" | \"gitea\" | \"bitbucket\" | \"generic\"", host, host)
+	}
+
+	sp := SourceSpec{Kind: KindGit, Forge: forge, Host: "https://" + host, Raw: raw}
+
+	var ref, skill string
+	var pinned bool
+	if hadScheme {
+		if i := strings.IndexAny(rest, "?#"); i >= 0 {
+			rest = rest[:i]
+		}
+	} else {
+		rest, ref, skill, pinned = peelRefAndSkill(rest)
+	}
+
+	rest = strings.Trim(rest, "/")
+	parts := strings.Split(rest, "/")
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return SourceSpec{}, fmt.Errorf("invalid forge URL %q: expected host/owner/repo", raw)
+	}
+	sp.Owner = parts[0]
+	sp.Repo = strings.TrimSuffix(parts[1], ".git")
+	if sp.Repo == "" {
+		return SourceSpec{}, fmt.Errorf("invalid forge URL %q: expected host/owner/repo", raw)
+	}
+
+	if len(parts) > 2 {
+		mref, sub, err := parseForgeMarker(forge, parts[2:], raw)
+		if err != nil {
+			return SourceSpec{}, err
+		}
+		if mref != "" {
+			ref, pinned = mref, true
+		}
+		if sub != "" {
+			cleaned, err := cleanSubpath(sub, raw)
+			if err != nil {
+				return SourceSpec{}, err
+			}
+			sp.Subpath = cleaned
+		}
+	}
+
+	sp.Ref = ref
+	sp.Pinned = pinned
+	if skill != "" {
+		if strings.Contains(skill, "/") {
+			return SourceSpec{}, fmt.Errorf("invalid #skill %q: must not contain '/'", skill)
+		}
+		sp.Skill = skill
+	}
+	return sp, nil
+}
+
+// parseForgeMarker interprets a forge's browser-URL path markers (the segments
+// after owner/repo) into a ref and a subpath. Each provider uses a different
+// marker layout. When no marker matches, the segments are treated as a subpath.
+func parseForgeMarker(forge Forge, segs []string, raw string) (ref, sub string, err error) {
+	switch forge {
+	case ForgeGitLab:
+		// /-/tree/<ref>/<sub>, /-/blob/<ref>/<file>
+		if len(segs) >= 1 && segs[0] == "-" {
+			if len(segs) < 3 || segs[2] == "" {
+				return "", "", fmt.Errorf("invalid GitLab URL %q: %s needs a ref", raw, strings.Join(segs, "/"))
+			}
+			return segs[2], blobDir(segs[1], strings.Join(segs[3:], "/")), nil
+		}
+	case ForgeForgejo, ForgeGeneric:
+		// /src/branch|tag|commit/<ref>/<sub>, /raw/branch/<ref>/<file>
+		if len(segs) >= 2 && (segs[0] == "src" || segs[0] == "raw") {
+			switch segs[1] {
+			case "branch", "tag", "commit":
+				if len(segs) < 3 || segs[2] == "" {
+					return "", "", fmt.Errorf("invalid Forgejo URL %q: %s/%s needs a ref", raw, segs[0], segs[1])
+				}
+				kind := "tree"
+				if segs[0] == "raw" {
+					kind = "blob"
+				}
+				return segs[2], blobDir(kind, strings.Join(segs[3:], "/")), nil
+			}
+		}
+	case ForgeBitbucket:
+		// /src/<ref>/<sub>
+		if len(segs) >= 1 && segs[0] == "src" {
+			if len(segs) < 2 || segs[1] == "" {
+				return "", "", fmt.Errorf("invalid Bitbucket URL %q: src needs a ref", raw)
+			}
+			return segs[1], strings.Join(segs[2:], "/"), nil
+		}
+	}
+	return "", strings.Join(segs, "/"), nil
+}
+
+// blobDir roots a "blob"/"raw" file link at its containing directory so the
+// surrounding skill (its SKILL.md) is discovered; "tree" links keep the path.
+func blobDir(kind, sub string) string {
+	if kind != "blob" || sub == "" {
+		return sub
+	}
+	d := path.Dir(sub)
+	if d == "." || d == "/" {
+		return ""
+	}
+	return d
+}
+
+// peelRefAndSkill strips a trailing "#skill" then "@ref" from a bare spec body,
+// matching the GitHub shorthand grammar. The ref is taken from the LAST '@' so
+// refs may themselves contain '/'.
+func peelRefAndSkill(body string) (rest, ref, skill string, pinned bool) {
+	rest = body
+	if i := strings.Index(rest, "#"); i >= 0 {
+		skill = rest[i+1:]
+		rest = rest[:i]
+	}
+	if i := strings.LastIndex(rest, "@"); i >= 0 {
+		ref = rest[i+1:]
+		pinned = true
+		rest = rest[:i]
+	}
+	return rest, ref, skill, pinned
 }
 
 // gitHubURLPrefixes are the recognized leading forms of a github.com URL.
@@ -295,18 +571,8 @@ func parseNPM(body, raw string) (SourceSpec, error) {
 func parseGitHub(body, raw string) (SourceSpec, error) {
 	sp := SourceSpec{Kind: KindGitHub, Raw: raw}
 
-	// Peel "#skill" first (the grammar puts it last, after any @ref).
-	if i := strings.Index(body, "#"); i >= 0 {
-		sp.Skill = body[i+1:]
-		body = body[:i]
-	}
-
-	// Peel "@ref" on the LAST '@' so refs may contain '/'.
-	if i := strings.LastIndex(body, "@"); i >= 0 {
-		sp.Ref = body[i+1:]
-		sp.Pinned = true
-		body = body[:i]
-	}
+	// Peel "#skill" (grammar-last) then "@ref" (last '@', so refs may contain '/').
+	body, sp.Ref, sp.Skill, sp.Pinned = peelRefAndSkill(body)
 
 	parts := strings.Split(body, "/")
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {

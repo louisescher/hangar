@@ -55,7 +55,7 @@ func newInstallCmd() *cobra.Command {
 				return outputReport(c, rep, &sec, asJSON)
 			}
 
-			s, err := spec.Parse(args[0])
+			s, err := eng.Parse(args[0])
 			if err != nil {
 				return err
 			}

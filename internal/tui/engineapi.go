@@ -18,6 +18,9 @@ import (
 // EngineAPI is the surface the TUI depends on. *engine.Engine satisfies it; a
 // fake implements it in tests.
 type EngineAPI interface {
+	// Parse parses a source specifier, resolving self-hosted forge hosts from
+	// the user's configured forge registry.
+	Parse(raw string) (spec.SourceSpec, error)
 	// Discover fetches a source and crawls it for skills and references. The
 	// returned *engine.Discovered must be Closed by the caller.
 	Discover(ctx context.Context, s spec.SourceSpec) (*engine.Discovered, error)

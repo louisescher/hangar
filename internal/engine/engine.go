@@ -6,10 +6,12 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/louisescher/hangar/internal/config"
 	"github.com/louisescher/hangar/internal/discover"
 	"github.com/louisescher/hangar/internal/fetch"
+	"github.com/louisescher/hangar/internal/fetch/gitforge"
 	"github.com/louisescher/hangar/internal/fetch/github"
 	"github.com/louisescher/hangar/internal/fetch/local"
 	"github.com/louisescher/hangar/internal/fetch/npmreg"
@@ -24,16 +26,37 @@ type Engine struct {
 	gh    fetch.Fetcher
 	npm   fetch.Fetcher
 	local fetch.Fetcher
+	git   fetch.Fetcher // generic git forges (GitLab, Bitbucket, Forgejo/Gitea, …)
+
+	// hostForges maps a self-hosted host to its forge dialect, built from the
+	// user's config, so Parse can recognize self-hosted URLs.
+	hostForges map[string]spec.Forge
 }
 
 // New constructs an Engine with default backends (GitHub authenticated from the
-// ambient token, npm from the resolved .npmrc config, local filesystem).
+// ambient token, npm from the resolved .npmrc config, local filesystem, and the
+// generic git-forge router for other hosts).
 func New() *Engine {
-	return &Engine{
-		gh:    github.New(nil, config.GitHubToken()),
-		npm:   npmreg.New(nil, config.LoadNPMRC()),
-		local: local.New(),
+	forges := config.LoadForges()
+	hostForges := map[string]spec.Forge{}
+	for host, typ := range forges.SelfHostedForges() {
+		if f, ok := spec.ForgeFromString(typ); ok {
+			hostForges[host] = f
+		}
 	}
+	return &Engine{
+		gh:         github.New(nil, config.GitHubToken()),
+		npm:        npmreg.New(nil, config.LoadNPMRC()),
+		local:      local.New(),
+		git:        gitforge.NewRouter(nil, forges),
+		hostForges: hostForges,
+	}
+}
+
+// Parse parses a source specifier, resolving self-hosted forge hosts from the
+// user's configured forge registry.
+func (e *Engine) Parse(raw string) (spec.SourceSpec, error) {
+	return spec.ParseWithForges(raw, e.hostForges)
 }
 
 // Discovered is the result of crawling a source. Close must be called to release
@@ -62,6 +85,8 @@ func (e *Engine) fetcherFor(s spec.SourceSpec) (fetch.Fetcher, error) {
 	switch s.Kind {
 	case spec.KindGitHub:
 		return e.gh, nil
+	case spec.KindGit:
+		return e.git, nil
 	case spec.KindNPM:
 		return e.npm, nil
 	case spec.KindLocal:
@@ -158,9 +183,18 @@ func sourceLabel(s spec.SourceSpec) string {
 	switch s.Kind {
 	case spec.KindGitHub:
 		return s.Owner + "/" + s.Repo
+	case spec.KindGit:
+		return hostLabel(s.Host) + "/" + s.Owner + "/" + s.Repo
 	case spec.KindNPM:
 		return "npm:" + s.Pkg
 	default:
 		return s.Path
 	}
+}
+
+// hostLabel renders a host origin without its scheme for display.
+func hostLabel(host string) string {
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	return host
 }
