@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/louisescher/hangar/compare/v0.2.1...v0.3.0) (2026-09-15)
+
+
+### Features
+
+* feat: Allow for different Git providers ([#10](https://github.com/louisescher/hangar/issues/10)) ([751e451](https://github.com/louisescher/hangar/commit/751e4518332aba25af95fb98bfab3b6c59395b9b))
+* tangled support ([8297922](https://github.com/louisescher/hangar/commit/8297922c3ad610f6c57d56034c359be03a83427c))
+
 ## [0.2.1](https://github.com/louisescher/hangar/compare/v0.2.0...v0.2.1) (2026-06-12)
 
 
