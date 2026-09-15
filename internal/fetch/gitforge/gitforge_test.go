@@ -73,6 +73,7 @@ var forgeCases = []forgeCase{
 	{"gitlab", GitLabProfile, "/owner/skills/-/archive/"},
 	{"forgejo", ForgejoProfile, "/owner/skills/archive/"},
 	{"bitbucket", BitbucketProfile, "/owner/skills/get/"},
+	{"tangled", TangledProfile, "/owner/skills/archive/"},
 	{"generic", GenericProfile, "/owner/skills/archive/"},
 }
 

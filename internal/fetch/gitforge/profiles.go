@@ -64,6 +64,19 @@ func BitbucketProfile(host string) Profile {
 	}
 }
 
+// TangledProfile fetches from a Tangled host (tangled.org or its tangled.sh
+// alias). Its archive layout matches Forgejo/Gitea; Tangled has no token auth.
+func TangledProfile(host string) Profile {
+	return Profile{
+		Name:           "tangled",
+		BaseURL:        host,
+		TarballBaseURL: host,
+		TarballPath: func(owner, repo, ref string) string {
+			return fmt.Sprintf("/%s/%s/archive/%s.tar.gz", owner, repo, ref)
+		},
+	}
+}
+
 // GenericProfile is the catch-all for self-hosted hosts of unknown dialect. It
 // assumes the Forgejo/Gitea archive layout, which is the most common among
 // self-hosted open-source forges.
@@ -84,6 +97,8 @@ func ProfileFor(forge spec.Forge, host string) (Profile, error) {
 		return ForgejoProfile(host), nil
 	case spec.ForgeBitbucket:
 		return BitbucketProfile(host), nil
+	case spec.ForgeTangled:
+		return TangledProfile(host), nil
 	case spec.ForgeGeneric:
 		return GenericProfile(host), nil
 	default:

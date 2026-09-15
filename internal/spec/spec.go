@@ -9,6 +9,7 @@
 //	forgeURL := ["https://"|"http://"|"ssh://"|"git@"] <host> ("/"|":")
 //	           <owner> "/" <repo>[".git"] [<provider marker> "/" <ref> ["/" <subpath>]]
 //	github  := <owner> "/" <repo> ["/" <subpath>] ["@" <ref>] ["#" <skill>]
+//	tangled := "tangled:" <owner> "/" <repo> ["/" <subpath>] ["@" <ref>] ["#" <skill>]
 //
 // Disambiguation is order-sensitive and deliberate:
 //   - Local paths are checked first, because a relative path can otherwise look
@@ -30,6 +31,8 @@
 //     "#bar" first, then take "@v2" as the ref. The ref is taken from the LAST
 //     "@" so refs may themselves contain "/" (e.g. release/1.x). Owner, repo and
 //     subpath never contain "@", which keeps this unambiguous.
+//   - A bare "owner/repo" is GitHub; Tangled requires the "tangled:" prefix or a
+//     tangled.org/tangled.sh host, so the two never collide.
 package spec
 
 import (
@@ -79,6 +82,7 @@ const (
 	ForgeGitLab    Forge = "gitlab"
 	ForgeForgejo   Forge = "forgejo" // also Gitea and Codeberg
 	ForgeBitbucket Forge = "bitbucket"
+	ForgeTangled   Forge = "tangled" // tangled.org and its tangled.sh alias
 	ForgeGeneric   Forge = "generic"
 )
 
@@ -94,6 +98,8 @@ func ForgeFromString(s string) (Forge, bool) {
 		return ForgeForgejo, true
 	case "bitbucket":
 		return ForgeBitbucket, true
+	case "tangled":
+		return ForgeTangled, true
 	case "generic":
 		return ForgeGeneric, true
 	}
@@ -148,6 +154,8 @@ func ParseWithForges(s string, hosts map[string]Forge) (SourceSpec, error) {
 		return parseLocal(s, raw)
 	case strings.HasPrefix(s, "npm:"):
 		return parseNPM(strings.TrimPrefix(s, "npm:"), raw)
+	case strings.HasPrefix(s, "tangled:"):
+		return parseTangledPrefix(strings.TrimPrefix(s, "tangled:"), raw, hosts)
 	case isGitHubURL(s):
 		return parseGitHubURL(s, raw)
 	case isForgeURL(s):
@@ -163,6 +171,8 @@ var publicForgeHosts = map[string]Forge{
 	"bitbucket.org": ForgeBitbucket,
 	"codeberg.org":  ForgeForgejo,
 	"gitlab.com":    ForgeGitLab,
+	"tangled.org":   ForgeTangled,
+	"tangled.sh":    ForgeTangled,
 }
 
 // ForgeForHost resolves a host to its forge dialect, consulting the built-in
@@ -227,6 +237,15 @@ func stripSchemeHost(s string) (host, rest string) {
 	return s, ""
 }
 
+// parseTangledPrefix parses the "tangled:owner/repo[/subpath][@ref][#skill]"
+// shorthand by routing it through the forge parser as a tangled.org host.
+func parseTangledPrefix(body, raw string, hosts map[string]Forge) (SourceSpec, error) {
+	if body == "" {
+		return SourceSpec{}, fmt.Errorf("invalid forge URL %q: missing owner/repo", raw)
+	}
+	return parseForgeURL("tangled.org/"+body, raw, hosts)
+}
+
 // parseForgeURL turns a non-github.com forge URL into a KindGit SourceSpec.
 // URLs with an explicit scheme are treated as browser/clone links (query and
 // fragment dropped; the ref/subpath come from the provider's path markers).
@@ -249,7 +268,7 @@ func parseForgeURL(s, raw string, hosts map[string]Forge) (SourceSpec, error) {
 	}
 	forge, ok := ForgeForHost(host, hosts)
 	if !ok {
-		return SourceSpec{}, fmt.Errorf("unknown git host %q: register it in ~/.config/hangar/config.toml under [forges.hosts.%q] with type = \"gitlab\" | \"forgejo\" | \"gitea\" | \"bitbucket\" | \"generic\"", host, host)
+		return SourceSpec{}, fmt.Errorf("unknown git host %q: register it in ~/.config/hangar/config.toml under [forges.hosts.%q] with type = \"gitlab\" | \"forgejo\" | \"gitea\" | \"bitbucket\" | \"tangled\" | \"generic\"", host, host)
 	}
 
 	sp := SourceSpec{Kind: KindGit, Forge: forge, Host: "https://" + host, Raw: raw}
@@ -338,6 +357,14 @@ func parseForgeMarker(forge Forge, segs []string, raw string) (ref, sub string, 
 				return "", "", fmt.Errorf("invalid Bitbucket URL %q: src needs a ref", raw)
 			}
 			return segs[1], strings.Join(segs[2:], "/"), nil
+		}
+	case ForgeTangled:
+		// /tree/<ref>/<sub>, /blob/<ref>/<file>
+		if len(segs) >= 1 && (segs[0] == "tree" || segs[0] == "blob") {
+			if len(segs) < 2 || segs[1] == "" {
+				return "", "", fmt.Errorf("invalid Tangled URL %q: %s needs a ref", raw, segs[0])
+			}
+			return segs[1], blobDir(segs[0], strings.Join(segs[2:], "/")), nil
 		}
 	}
 	return "", strings.Join(segs, "/"), nil

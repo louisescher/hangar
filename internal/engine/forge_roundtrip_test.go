@@ -37,6 +37,11 @@ func TestForgeLockRoundTrip(t *testing.T) {
 			in:         spec.SourceSpec{Kind: spec.KindGit, Forge: spec.ForgeGitLab, Host: "https://git.company.com", Owner: "team", Repo: "repo"},
 			wantSource: "https://git.company.com/team/repo",
 		},
+		{
+			name:       "tangled",
+			in:         spec.SourceSpec{Kind: spec.KindGit, Forge: spec.ForgeTangled, Host: "https://tangled.org", Owner: "socialde.pt", Repo: "atproto.md", Subpath: "sub"},
+			wantSource: "https://tangled.org/socialde.pt/atproto.md",
+		},
 	}
 
 	for _, tt := range tests {

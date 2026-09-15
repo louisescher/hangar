@@ -36,7 +36,7 @@ type catalogModel struct {
 func (s *catalogModel) enter(app *App) tea.Cmd {
 	if !s.ready {
 		s.input = textinput.New()
-		s.input.Placeholder = "owner/repo  ·  https://github.com/owner/repo  ·  https://gitlab.com/group/proj  ·  https://codeberg.org/owner/repo  ·  npm:package"
+		s.input.Placeholder = "owner/repo  ·  https://github.com/owner/repo  ·  https://gitlab.com/group/proj  ·  tangled:owner/repo  ·  npm:package"
 		s.input.Prompt = "  "
 		s.ready = true
 	}
@@ -160,7 +160,7 @@ func (s *catalogModel) homeView(app *App) string {
 	b.WriteString("\n")
 
 	// Example specs
-	b.WriteString(centerLine(faintStyle.Render("e.g.  anthropics/skills  ·  https://github.com/owner/repo  ·  https://gitlab.com/group/proj  ·  npm:@scope/pkg")) + "\n")
+	b.WriteString(centerLine(faintStyle.Render("e.g.  anthropics/skills  ·  https://github.com/owner/repo  ·  tangled:owner/repo  ·  https://gitlab.com/group/proj  ·  npm:@scope/pkg")) + "\n")
 	b.WriteString("\n")
 
 	// Help

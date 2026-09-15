@@ -238,6 +238,46 @@ func TestParseForges(t *testing.T) {
 			in:   "https://git.company.com/team/repo/-/tree/main/x",
 			want: SourceSpec{Kind: KindGit, Forge: ForgeGitLab, Host: "https://git.company.com", Owner: "team", Repo: "repo", Ref: "main", Pinned: true, Subpath: "x"},
 		},
+		{
+			name: "tangled url bare",
+			in:   "https://tangled.org/socialde.pt/atproto.md",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeTangled, Host: "https://tangled.org", Owner: "socialde.pt", Repo: "atproto.md"},
+		},
+		{
+			name: "tangled url tree marker",
+			in:   "https://tangled.org/owner/repo/tree/main/sub/dir",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeTangled, Host: "https://tangled.org", Owner: "owner", Repo: "repo", Ref: "main", Pinned: true, Subpath: "sub/dir"},
+		},
+		{
+			name: "tangled url blob roots at dir",
+			in:   "https://tangled.org/owner/repo/blob/main/sub/SKILL.md",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeTangled, Host: "https://tangled.org", Owner: "owner", Repo: "repo", Ref: "main", Pinned: true, Subpath: "sub"},
+		},
+		{
+			name: "tangled.sh alias",
+			in:   "https://tangled.sh/owner/repo",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeTangled, Host: "https://tangled.sh", Owner: "owner", Repo: "repo"},
+		},
+		{
+			name: "tangled scheme-less shorthand with ref and skill",
+			in:   "tangled.org/owner/repo@v1#pdf",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeTangled, Host: "https://tangled.org", Owner: "owner", Repo: "repo", Ref: "v1", Pinned: true, Skill: "pdf"},
+		},
+		{
+			name: "tangled prefix shorthand",
+			in:   "tangled:owner/repo@v1#pdf",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeTangled, Host: "https://tangled.org", Owner: "owner", Repo: "repo", Ref: "v1", Pinned: true, Skill: "pdf"},
+		},
+		{
+			name: "tangled prefix with subpath",
+			in:   "tangled:owner/repo/skills/foo",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeTangled, Host: "https://tangled.org", Owner: "owner", Repo: "repo", Subpath: "skills/foo"},
+		},
+		{
+			name: "tangled ssh clone url",
+			in:   "git@tangled.org:owner/repo.git",
+			want: SourceSpec{Kind: KindGit, Forge: ForgeTangled, Host: "https://tangled.org", Owner: "owner", Repo: "repo"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -260,6 +300,10 @@ func TestParseForgeErrors(t *testing.T) {
 		"https://gitlab.com/owner",                  // missing repo
 		"https://gitlab.com/owner/repo/-/tree",      // tree marker without a ref
 		"https://gitlab.com/o/r/-/tree/main/../etc", // subpath traversal
+		"tangled:",                            // tangled prefix missing owner/repo
+		"tangled:owner",                       // tangled prefix missing repo
+		"https://tangled.org/owner",           // missing repo
+		"https://tangled.org/owner/repo/tree", // tree marker without a ref
 	}
 	for _, in := range bad {
 		t.Run(in, func(t *testing.T) {
@@ -282,6 +326,27 @@ func TestParseGitHubStillDefaults(t *testing.T) {
 		if got.Kind != KindGitHub {
 			t.Errorf("ParseWithForges(%q) Kind = %v, want KindGitHub", in, got.Kind)
 		}
+	}
+}
+
+func TestForgeFromString(t *testing.T) {
+	tests := map[string]Forge{
+		"github":    ForgeGitHub,
+		"gitlab":    ForgeGitLab,
+		"forgejo":   ForgeForgejo,
+		"gitea":     ForgeForgejo,
+		"bitbucket": ForgeBitbucket,
+		"tangled":   ForgeTangled,
+		"generic":   ForgeGeneric,
+	}
+	for in, want := range tests {
+		got, ok := ForgeFromString(in)
+		if !ok || got != want {
+			t.Errorf("ForgeFromString(%q) = %v, %v; want %v, true", in, got, ok, want)
+		}
+	}
+	if _, ok := ForgeFromString("nope"); ok {
+		t.Error("ForgeFromString(\"nope\") unexpectedly ok")
 	}
 }
 

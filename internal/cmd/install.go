@@ -27,8 +27,9 @@ func newInstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install [source]",
 		Short: "Install skills from a source (or reinstall from the lockfile)",
-		Long: "Install Agent Skills from a GitHub repo (owner/repo[/subpath][@ref][#skill]),\n" +
-			"an npm package (npm:pkg), or a local path. On a terminal the interactive\n" +
+		Long: "Install Agent Skills from a git repo (GitHub owner/repo, Tangled\n" +
+			"tangled:owner/repo, or a GitLab/Bitbucket/Forgejo URL), an npm package\n" +
+			"(npm:pkg), or a local path. On a terminal the interactive\n" +
 			"picker opens when a source has multiple skills; pass --all or -y to install\n" +
 			"headless.\n\n" +
 			"With no source, reinstall everything recorded in .agents/hangar.lock — handy\n" +

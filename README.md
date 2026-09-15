@@ -9,9 +9,9 @@ agents (Claude Code, Cursor, Copilot, opencode, Codex, Gemini CLI, and ~50
 others) load to extend their capabilities.
 
 Hangar discovers skills in **Git repositories** (GitHub, GitLab, Bitbucket,
-Forgejo/Gitea, and self-hosted hosts) and **npm packages**, lets you pick exactly
-which ones to install through an interactive tree picker, and wires them into
-every agent on your machine that follows the `.agents/` convention.
+Forgejo/Gitea, Tangled, and self-hosted hosts) and **npm packages**, lets you
+pick exactly which ones to install through an interactive tree picker, and wires
+them into every agent on your machine that follows the `.agents/` convention.
 
 Inspired by [`withastro/rosie`](https://github.com/withastro/rosie), with a
 TUI-first workflow, subpath installs, real npm-registry fetching, a TOML
@@ -96,6 +96,7 @@ hangar doctor
 | GitLab repo / URL          | `https://gitlab.com/group/proj/-/tree/main/sub`       |
 | Bitbucket repo / URL       | `https://bitbucket.org/owner/repo/src/main/sub`       |
 | Forgejo / Gitea / Codeberg | `https://codeberg.org/owner/repo/src/branch/main/sub` |
+| Tangled                    | `tangled:owner/repo`, `https://tangled.org/owner/repo` |
 | npm package                | `npm:lodash`, `npm:@scope/pkg`                        |
 | …a version / subpath / doc | `npm:pkg@1.2.0`, `npm:pkg/sub`, `npm:pkg#docs/api.md` |
 | local path                 | `./path`, `/abs/path`, `~/path`, `file://…`           |
@@ -119,12 +120,16 @@ bitbucket_token = "..."
 
 # Register a self-hosted host so its URLs are recognized:
 [forges.hosts."git.company.com"]
-type  = "gitlab"            # gitlab | forgejo | gitea | bitbucket | generic
+type  = "gitlab"            # gitlab | forgejo | gitea | bitbucket | tangled | generic
 token = "${COMPANY_TOKEN}"  # ${ENV} references are expanded
 ```
 
 Environment variables take precedence over config-file tokens. A project-local
 `./hangar.toml` overrides the user file.
+
+Tangled (`tangled.org`, or the `tangled.sh` alias) is public and needs no token.
+The `tangled:owner/repo` shorthand is equivalent to a `tangled.org/owner/repo`
+URL.
 
 ## The interactive picker
 
