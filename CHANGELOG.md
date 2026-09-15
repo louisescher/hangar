@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/louisescher/hangar/compare/v0.3.0...v0.4.0) (2026-09-15)
+
+
+### Features
+
+* http skills, better installs for Pi ([e4bb1cc](https://github.com/louisescher/hangar/commit/e4bb1ccaf71b901c4e2a46ab5f1e0efe3261930f))
+
 ## [0.3.0](https://github.com/louisescher/hangar/compare/v0.2.1...v0.3.0) (2026-09-15)
 
 
