@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/louisescher/hangar/internal/engine"
-	"github.com/louisescher/hangar/internal/spec"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +26,7 @@ func newInfoCmd() *cobra.Command {
 				return err
 			}
 			if d == nil {
-				s, err := spec.Parse(args[0])
+				s, err := eng.Parse(args[0])
 				if err != nil {
 					return err
 				}

@@ -192,6 +192,9 @@ func lockSource(s spec.SourceSpec) string {
 	switch s.Kind {
 	case spec.KindGitHub:
 		return s.Owner + "/" + s.Repo
+	case spec.KindGit:
+		// Canonical origin URL so specFromEntry can reconstruct host/owner/repo.
+		return s.Host + "/" + s.Owner + "/" + s.Repo
 	case spec.KindLocal:
 		return "file://" + s.Path
 	case spec.KindNPM:

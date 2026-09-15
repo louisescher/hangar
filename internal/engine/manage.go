@@ -66,7 +66,7 @@ func (e *Engine) CheckUpdates(ctx context.Context, global bool) ([]InstalledStat
 			out[i].Latest = entryRef(entry)
 			continue
 		}
-		s, err := specFromEntry(entry)
+		s, err := e.specFromEntry(entry)
 		if err != nil || s.Kind == spec.KindLocal {
 			continue
 		}
@@ -207,18 +207,18 @@ type entryGroup struct {
 // subpath/file/skill so per-skill entries of one monorepo share a fetch.
 func sourceFetchKey(s spec.SourceSpec) string {
 	return strings.Join([]string{
-		fmt.Sprint(int(s.Kind)), s.Owner, s.Repo, s.Pkg, s.Path, s.Ref, fmt.Sprint(s.Pinned),
+		fmt.Sprint(int(s.Kind)), s.Host, string(s.Forge), s.Owner, s.Repo, s.Pkg, s.Path, s.Ref, fmt.Sprint(s.Pinned),
 	}, "\x00")
 }
 
 // groupEntries batches entries by source so each source is fetched once,
 // preserving first-seen order. Entries whose source can't be reconstructed are
 // skipped.
-func groupEntries(entries []lockfile.Entry) []entryGroup {
+func (e *Engine) groupEntries(entries []lockfile.Entry) []entryGroup {
 	var groups []entryGroup
 	index := map[string]int{}
 	for _, entry := range entries {
-		s, err := specFromEntry(entry)
+		s, err := e.specFromEntry(entry)
 		if err != nil {
 			continue
 		}
@@ -277,7 +277,7 @@ func (e *Engine) resolveEntry(ctx context.Context, g entryGroup, d *Discovered, 
 	// Fallback: fetch just this entry at its recorded subpath/file. This also
 	// catches a skill that was removed or renamed within a still-existing source
 	// — its subpath/name no longer resolves, which we report as "gone".
-	es, err := specFromEntry(entry)
+	es, err := e.specFromEntry(entry)
 	if err != nil {
 		return nil, nil, install.SourceMeta{}, cleanup, err
 	}
@@ -323,7 +323,7 @@ func (e *Engine) installEntries(ctx context.Context, baseDir string, entries []l
 	rep := install.Report{Audit: log}
 	installed, failed := map[string]bool{}, map[string]bool{}
 
-	groups := groupEntries(entries)
+	groups := e.groupEntries(entries)
 	total := 0
 	for _, g := range groups {
 		total += len(g.entries)
@@ -414,7 +414,7 @@ func (e *Engine) Pin(ctx context.Context, name, ref string, opt InstallOptions) 
 		return install.Report{}, e.SetPinned(name, true, opt)
 	}
 
-	s, err := specFromEntry(entry)
+	s, err := e.specFromEntry(entry)
 	if err != nil {
 		return install.Report{}, err
 	}
@@ -517,7 +517,7 @@ func (e *Engine) PreviewUpdate(ctx context.Context, name string, opt InstallOpti
 	if !ok {
 		return "", fmt.Errorf("no installed skill named %q", name)
 	}
-	s, err := specFromEntry(entry)
+	s, err := e.specFromEntry(entry)
 	if err != nil {
 		return "", err
 	}

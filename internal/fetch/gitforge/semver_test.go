@@ -1,4 +1,4 @@
-package github
+package gitforge
 
 import "testing"
 

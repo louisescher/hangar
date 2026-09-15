@@ -5,7 +5,6 @@ import (
 
 	"github.com/louisescher/hangar/internal/engine"
 	"github.com/louisescher/hangar/internal/present"
-	"github.com/louisescher/hangar/internal/spec"
 	"github.com/spf13/cobra"
 )
 
@@ -28,12 +27,12 @@ func newListCmd() *cobra.Command {
 				return listInstalled(c, global, asJSON)
 			}
 
-			s, err := spec.Parse(args[0])
+			eng := engine.New()
+			s, err := eng.Parse(args[0])
 			if err != nil {
 				return err
 			}
 
-			eng := engine.New()
 			d, err := eng.Discover(c.Context(), s)
 			if err != nil {
 				return err

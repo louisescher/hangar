@@ -79,6 +79,9 @@ func sourceText(s spec.SourceSpec) string {
 		return "npm:" + s.Pkg
 	case spec.KindGitHub:
 		return s.Owner + "/" + s.Repo
+	case spec.KindGit:
+		host := strings.TrimPrefix(strings.TrimPrefix(s.Host, "https://"), "http://")
+		return host + "/" + s.Owner + "/" + s.Repo
 	default:
 		return s.Path
 	}
