@@ -88,7 +88,7 @@ var Defs = []Def{
 	{Name: "mistral-vibe", Display: "Mistral Vibe", ProjectPath: ".vibe/skills", GlobalPath: ".vibe/skills", DetectDir: ".vibe"},
 	{Name: "mux", Display: "Mux", ProjectPath: ".mux/skills", GlobalPath: ".mux/skills", DetectDir: ".mux"},
 	{Name: "neovate", Display: "Neovate", ProjectPath: ".neovate/skills", GlobalPath: ".neovate/skills", DetectDir: ".neovate"},
-	{Name: "pi", Display: "Pi", ProjectPath: ".pi/skills", GlobalPath: ".pi/agent/skills", DetectDir: ".pi"},
+	{Name: "pi", Display: "Pi", ProjectPath: ".agents/skills", GlobalPath: ".agents/skills", DetectDir: ".pi"},
 	{Name: "pochi", Display: "Pochi", ProjectPath: ".pochi/skills", GlobalPath: ".pochi/skills", DetectDir: ".pochi"},
 	{Name: "qoder", Display: "Qoder", ProjectPath: ".qoder/skills", GlobalPath: ".qoder/skills", DetectDir: ".qoder"},
 	{Name: "replit", Display: "Replit", ProjectPath: ".agents/skills", GlobalPath: ".config/agents/skills", DetectDir: ".replit"},

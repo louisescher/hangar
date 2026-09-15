@@ -99,12 +99,14 @@ hangar doctor
 | Tangled                    | `tangled:owner/repo`, `https://tangled.org/owner/repo` |
 | npm package                | `npm:lodash`, `npm:@scope/pkg`                        |
 | …a version / subpath / doc | `npm:pkg@1.2.0`, `npm:pkg/sub`, `npm:pkg#docs/api.md` |
+| HTTP skill file            | `https://atproto.md/skill.md`                         |
 | local path                 | `./path`, `/abs/path`, `~/path`, `file://…`           |
 
 A pasted browser or clone URL from any supported host "just works"; the ref and
 subpath are read from the provider's URL markers. A bare `owner/repo` always
-means GitHub. Refs are taken from the **last** `@`, so they may contain `/`.
-Subpaths can never escape the repository root.
+means GitHub. An `http(s)://` URL whose host is not a recognized forge is
+fetched directly as a single skill file. Refs are taken from the **last** `@`,
+so they may contain `/`. Subpaths can never escape the repository root.
 
 ### Other Git hosts & private repos
 

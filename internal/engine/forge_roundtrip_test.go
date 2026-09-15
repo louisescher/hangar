@@ -64,15 +64,28 @@ func TestForgeLockRoundTrip(t *testing.T) {
 	}
 }
 
-// TestSpecFromForgeURLUnknownHostFallsBackGeneric ensures a committed lockfile
-// for an unregistered host still resolves (as generic) rather than erroring.
-func TestSpecFromForgeURLUnknownHostFallsBackGeneric(t *testing.T) {
+// TestSpecFromEntryUnregisteredHostIsHTTP ensures a lockfile source on a host
+// that is not a known forge reconstructs as a bare HTTP skill source.
+func TestSpecFromEntryUnregisteredHostIsHTTP(t *testing.T) {
 	e := &Engine{hostForges: nil}
-	got, err := e.specFromEntry(lockfile.Entry{Source: "https://git.unknown.example/owner/repo"})
+	got, err := e.specFromEntry(lockfile.Entry{Source: "https://atproto.md/skill.md"})
 	if err != nil {
 		t.Fatalf("specFromEntry: %v", err)
 	}
-	if got.Kind != spec.KindGit || got.Forge != spec.ForgeGeneric {
-		t.Errorf("got kind=%v forge=%v, want git/generic", got.Kind, got.Forge)
+	if got.Kind != spec.KindHTTP || got.URL != "https://atproto.md/skill.md" {
+		t.Errorf("got kind=%v url=%q, want http/url", got.Kind, got.URL)
+	}
+}
+
+// TestSpecFromEntryRegisteredHostStaysGit ensures a lockfile source on a
+// registered forge host still reconstructs as git, not HTTP.
+func TestSpecFromEntryRegisteredHostStaysGit(t *testing.T) {
+	e := &Engine{hostForges: map[string]spec.Forge{"git.company.com": spec.ForgeGitLab}}
+	got, err := e.specFromEntry(lockfile.Entry{Source: "https://git.company.com/team/repo"})
+	if err != nil {
+		t.Fatalf("specFromEntry: %v", err)
+	}
+	if got.Kind != spec.KindGit || got.Forge != spec.ForgeGitLab {
+		t.Errorf("got kind=%v forge=%v, want git/gitlab", got.Kind, got.Forge)
 	}
 }

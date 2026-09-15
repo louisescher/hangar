@@ -14,7 +14,8 @@ func newInfoCmd() *cobra.Command {
 		Short: "Inspect a skill: metadata + rendered SKILL.md",
 		Long: "Browse a skill's metadata and rendered SKILL.md. The argument is first\n" +
 			"matched against an installed skill by name; otherwise it is treated as a\n" +
-			"source (owner/repo, tangled:owner/repo, npm:pkg, or a local path). A source with several skills\n" +
+			"source (owner/repo, tangled:owner/repo, npm:pkg, a bare HTTP(S) URL, or a\n" +
+			"local path). A source with several skills\n" +
 			"opens a selectable list. On a terminal this is an interactive viewer; piped\n" +
 			"or with --no-tty it prints instead.",
 		Args: cobra.ExactArgs(1),

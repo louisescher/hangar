@@ -174,6 +174,9 @@ func (e *Engine) specFromEntry(entry lockfile.Entry) (spec.SourceSpec, error) {
 			Skill: entry.Name,
 		}, nil
 	case strings.HasPrefix(entry.Source, "http://"), strings.HasPrefix(entry.Source, "https://"):
+		if hs, err := spec.ParseWithForges(entry.Source, e.hostForges); err == nil && hs.Kind == spec.KindHTTP {
+			return hs, nil
+		}
 		// A non-GitHub forge: source is the canonical "https://host/owner/repo".
 		s, err := specFromForgeURL(entry.Source, e.hostForges)
 		if err != nil {

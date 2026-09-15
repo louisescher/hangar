@@ -19,7 +19,8 @@ func newListCmd() *cobra.Command {
 		Long: "With no argument, manage the skills installed here: on a terminal this\n" +
 			"opens an interactive list (update or remove with a keypress); otherwise it\n" +
 			"prints them. With a source (owner/repo, tangled:owner/repo, npm:pkg, a\n" +
-			"subpath, or a local path), list the skills that source contains.",
+			"bare HTTP(S) URL, a subpath, or a local path), list the skills that source\n" +
+			"contains.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			w := c.OutOrStdout()

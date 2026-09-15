@@ -201,6 +201,8 @@ func lockSource(s spec.SourceSpec) string {
 		// The selected #file (if any) is recorded per reference entry, so the
 		// source string stays the bare package.
 		return "npm:" + s.Pkg
+	case spec.KindHTTP:
+		return s.URL
 	default:
 		return s.Raw
 	}

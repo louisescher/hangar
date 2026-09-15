@@ -37,6 +37,7 @@ package spec
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -50,6 +51,7 @@ const (
 	KindLocal
 	KindNPM
 	KindGit // any non-GitHub git forge (host carried in Host/Forge)
+	KindHTTP
 )
 
 func (k Kind) String() string {
@@ -62,6 +64,8 @@ func (k Kind) String() string {
 		return "npm"
 	case KindGit:
 		return "git"
+	case KindHTTP:
+		return "http"
 	default:
 		return "unknown"
 	}
@@ -129,6 +133,8 @@ type SourceSpec struct {
 	// local
 	Path string // filesystem path, ~-expanded and cleaned
 
+	URL string
+
 	Raw string // the original, unparsed input
 }
 
@@ -158,6 +164,8 @@ func ParseWithForges(s string, hosts map[string]Forge) (SourceSpec, error) {
 		return parseTangledPrefix(strings.TrimPrefix(s, "tangled:"), raw, hosts)
 	case isGitHubURL(s):
 		return parseGitHubURL(s, raw)
+	case isBareHTTPFile(s, hosts):
+		return parseHTTP(s, raw)
 	case isForgeURL(s):
 		return parseForgeURL(s, raw, hosts)
 	default:
@@ -186,6 +194,21 @@ func ForgeForHost(host string, hosts map[string]Forge) (Forge, bool) {
 		return f, true
 	}
 	return "", false
+}
+
+func isBareHTTPFile(s string, hosts map[string]Forge) bool {
+	l := strings.ToLower(s)
+	if !strings.HasPrefix(l, "http://") && !strings.HasPrefix(l, "https://") {
+		return false
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return false
+	}
+	if _, ok := ForgeForHost(u.Hostname(), hosts); ok {
+		return false
+	}
+	return strings.Trim(u.Path, "/") != ""
 }
 
 // isForgeURL reports whether s is a non-github.com git host URL (https/http/ssh
@@ -523,6 +546,15 @@ func isLocal(s string) bool {
 	default:
 		return false
 	}
+}
+
+func parseHTTP(s, raw string) (SourceSpec, error) {
+	u, err := url.Parse(s)
+	if err != nil {
+		return SourceSpec{}, fmt.Errorf("invalid HTTP URL %q: %w", raw, err)
+	}
+	u.Fragment = ""
+	return SourceSpec{Kind: KindHTTP, URL: u.String(), Raw: raw}, nil
 }
 
 func parseLocal(s, raw string) (SourceSpec, error) {

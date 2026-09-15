@@ -13,6 +13,7 @@ import (
 	"github.com/louisescher/hangar/internal/fetch"
 	"github.com/louisescher/hangar/internal/fetch/gitforge"
 	"github.com/louisescher/hangar/internal/fetch/github"
+	"github.com/louisescher/hangar/internal/fetch/httpfile"
 	"github.com/louisescher/hangar/internal/fetch/local"
 	"github.com/louisescher/hangar/internal/fetch/npmreg"
 	"github.com/louisescher/hangar/internal/spec"
@@ -27,6 +28,7 @@ type Engine struct {
 	npm   fetch.Fetcher
 	local fetch.Fetcher
 	git   fetch.Fetcher // generic git forges (GitLab, Bitbucket, Forgejo/Gitea, …)
+	http  fetch.Fetcher
 
 	// hostForges maps a self-hosted host to its forge dialect, built from the
 	// user's config, so Parse can recognize self-hosted URLs.
@@ -49,6 +51,7 @@ func New() *Engine {
 		npm:        npmreg.New(nil, config.LoadNPMRC()),
 		local:      local.New(),
 		git:        gitforge.NewRouter(nil, forges),
+		http:       httpfile.New(nil),
 		hostForges: hostForges,
 	}
 }
@@ -91,6 +94,8 @@ func (e *Engine) fetcherFor(s spec.SourceSpec) (fetch.Fetcher, error) {
 		return e.npm, nil
 	case spec.KindLocal:
 		return e.local, nil
+	case spec.KindHTTP:
+		return e.http, nil
 	default:
 		return nil, fmt.Errorf("unsupported source kind")
 	}
@@ -187,6 +192,8 @@ func sourceLabel(s spec.SourceSpec) string {
 		return hostLabel(s.Host) + "/" + s.Owner + "/" + s.Repo
 	case spec.KindNPM:
 		return "npm:" + s.Pkg
+	case spec.KindHTTP:
+		return s.URL
 	default:
 		return s.Path
 	}

@@ -296,7 +296,6 @@ func TestParseForges(t *testing.T) {
 
 func TestParseForgeErrors(t *testing.T) {
 	bad := []string{
-		"https://random.host/owner/repo",            // unknown, unconfigured host
 		"https://gitlab.com/owner",                  // missing repo
 		"https://gitlab.com/owner/repo/-/tree",      // tree marker without a ref
 		"https://gitlab.com/o/r/-/tree/main/../etc", // subpath traversal
@@ -311,6 +310,54 @@ func TestParseForgeErrors(t *testing.T) {
 				t.Errorf("ParseWithForges(%q) expected error, got %+v", in, got)
 			}
 		})
+	}
+}
+
+func TestParseBareHTTP(t *testing.T) {
+	hosts := map[string]Forge{"git.company.com": ForgeGitLab}
+	tests := []struct {
+		in   string
+		want SourceSpec
+	}{
+		{
+			in:   "https://atproto.md/skill.md",
+			want: SourceSpec{Kind: KindHTTP, URL: "https://atproto.md/skill.md"},
+		},
+		{
+			in:   "https://example.com/my-skill",
+			want: SourceSpec{Kind: KindHTTP, URL: "https://example.com/my-skill"},
+		},
+		{
+			in:   "http://example.com/a/b/skill.md?v=2#top",
+			want: SourceSpec{Kind: KindHTTP, URL: "http://example.com/a/b/skill.md?v=2"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			got, err := ParseWithForges(tt.in, hosts)
+			if err != nil {
+				t.Fatalf("ParseWithForges(%q): %v", tt.in, err)
+			}
+			tt.want.Raw = tt.in
+			if got != tt.want {
+				t.Errorf("ParseWithForges(%q)\n got = %+v\nwant = %+v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseKnownForgeBeatsBareHTTP(t *testing.T) {
+	for _, in := range []string{
+		"https://tangled.org/socialde.pt/atproto.md",
+		"https://git.company.com/team/repo",
+	} {
+		got, err := ParseWithForges(in, map[string]Forge{"git.company.com": ForgeGitLab})
+		if err != nil {
+			t.Fatalf("ParseWithForges(%q): %v", in, err)
+		}
+		if got.Kind != KindGit {
+			t.Errorf("ParseWithForges(%q) Kind = %v, want KindGit", in, got.Kind)
+		}
 	}
 }
 

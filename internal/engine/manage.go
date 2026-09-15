@@ -207,7 +207,7 @@ type entryGroup struct {
 // subpath/file/skill so per-skill entries of one monorepo share a fetch.
 func sourceFetchKey(s spec.SourceSpec) string {
 	return strings.Join([]string{
-		fmt.Sprint(int(s.Kind)), s.Host, string(s.Forge), s.Owner, s.Repo, s.Pkg, s.Path, s.Ref, fmt.Sprint(s.Pinned),
+		fmt.Sprint(int(s.Kind)), s.Host, string(s.Forge), s.Owner, s.Repo, s.Pkg, s.Path, s.URL, s.Ref, fmt.Sprint(s.Pinned),
 	}, "\x00")
 }
 
